@@ -1,0 +1,12 @@
+[Página 17]
+DEPOIS DE TANTA ALGAZARRA,
+GRITINHOS E ESTRIPULIA,
+SEGUEM JUNTAS AO LAVABO,
+DE MÃOS DADAS, COM ALEGRIA.
+
+
+miolo_Sofia quer brincar.indd 17
+
+09/10/2024 09:18:52
+
+![17](./img/page_17-01.jpg)

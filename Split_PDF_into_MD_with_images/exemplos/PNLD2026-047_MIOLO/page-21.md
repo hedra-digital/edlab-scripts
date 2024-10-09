@@ -1,0 +1,12 @@
+[Página 21]
+SE POR ACASO ALGUÉM SE MACHUCAR,
+NÃO PRECISA SE PREOCUPAR.
+NO CONSULTÓRIO DA DOUTORA SOFIA
+O REMÉDIO É AFETIVO.
+
+
+miolo_Sofia quer brincar.indd 21
+
+09/10/2024 09:18:52
+
+![21](./img/page_21-01.jpg)
