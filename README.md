@@ -1,5 +1,6 @@
 # Como arquivar seu script?
 
+0. Utilize como padrão de nome uma pequena exmplicação em inglês, com maiúsculas
 1. Crie uma pasta para cada script
 2. Crie um README.md dentro da pasta
 3. Escreva no arquivo a  "História" que motivou a redação do script
