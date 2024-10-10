@@ -1,0 +1,14 @@
+[Página 15]
+MAS A SAPECA SOFIA
+NÃO APRENDEU A ESPERAR.
+FOGE, CORRE E
+FAZ ACROBACIA,
+CHAMANDO A MÃE
+PARA BRINCAR DE PEGAR.
+
+
+miolo_Sofia quer brincar.indd 15
+
+09/10/2024 09:18:51
+
+![15](./img/page_015.jpg)

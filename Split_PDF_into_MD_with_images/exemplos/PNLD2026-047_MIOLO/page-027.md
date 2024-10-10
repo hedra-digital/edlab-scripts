@@ -1,0 +1,11 @@
+[Página 27]
+DEPOIS, BEIJO DE BOA-NOITE,
+UM CHEIRINHO DA MAMÃE,
+OUVIR UMA CANÇÃO DE NINAR
+E A NOITE INTEIRA PARA SONHAR.
+
+miolo_Sofia quer brincar.indd 27
+
+09/10/2024 09:18:53
+
+![27](./img/page_027.jpg)

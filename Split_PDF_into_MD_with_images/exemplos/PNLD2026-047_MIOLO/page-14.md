@@ -1,12 +1,0 @@
-[Página 14]
-— COMI TUDO! JÁ POSSO BRINCAR?
-— SÓ DEPOIS QUE TROCAR DE ROUPA,
-PENTEAR OS CABELOS E OS
-DENTINHOS ESCOVAR!
-
-
-miolo_Sofia quer brincar.indd 14
-
-09/10/2024 09:18:51
-
-![14](./img/page_14-01.jpg)
