@@ -3,7 +3,7 @@ miolo_Sofia quer brincar.indd 1
 
 09/10/2024 09:18:50
 
-![1](./img/page_001.jpg)
+![1](./img/page_0001.jpg)
 
 ---
 
@@ -53,7 +53,7 @@ miolo_Sofia quer brincar.indd 2
 
 09/10/2024 09:18:50
 
-![2](./img/page_002.jpg)
+![2](./img/page_0002.jpg)
 
 ---
 
@@ -71,7 +71,7 @@ miolo_Sofia quer brincar.indd 3
 
 09/10/2024 09:18:50
 
-![3](./img/page_003.jpg)
+![3](./img/page_0003.jpg)
 
 ---
 
@@ -80,7 +80,7 @@ miolo_Sofia quer brincar.indd 4
 
 09/10/2024 09:18:50
 
-![4](./img/page_004.jpg)
+![4](./img/page_0004.jpg)
 
 ---
 
@@ -94,7 +94,7 @@ miolo_Sofia quer brincar.indd 5
 
 09/10/2024 09:18:50
 
-![5](./img/page_005.jpg)
+![5](./img/page_0005.jpg)
 
 ---
 
@@ -113,7 +113,7 @@ miolo_Sofia quer brincar.indd 6
 
 09/10/2024 09:18:50
 
-![6](./img/page_006.jpg)
+![6](./img/page_0006.jpg)
 
 ---
 
@@ -126,7 +126,7 @@ miolo_Sofia quer brincar.indd 7
 
 09/10/2024 09:18:51
 
-![7](./img/page_007.jpg)
+![7](./img/page_0007.jpg)
 
 ---
 
@@ -141,7 +141,7 @@ miolo_Sofia quer brincar.indd 8
 
 09/10/2024 09:18:51
 
-![8](./img/page_008.jpg)
+![8](./img/page_0008.jpg)
 
 ---
 
@@ -156,7 +156,7 @@ miolo_Sofia quer brincar.indd 9
 
 09/10/2024 09:18:51
 
-![9](./img/page_009.jpg)
+![9](./img/page_0009.jpg)
 
 ---
 
@@ -171,7 +171,7 @@ miolo_Sofia quer brincar.indd 10
 
 09/10/2024 09:18:51
 
-![10](./img/page_010.jpg)
+![10](./img/page_0010.jpg)
 
 ---
 
@@ -184,7 +184,7 @@ miolo_Sofia quer brincar.indd 11
 
 09/10/2024 09:18:51
 
-![11](./img/page_011.jpg)
+![11](./img/page_0011.jpg)
 
 ---
 
@@ -196,7 +196,7 @@ miolo_Sofia quer brincar.indd 12
 
 09/10/2024 09:18:51
 
-![12](./img/page_012.jpg)
+![12](./img/page_0012.jpg)
 
 ---
 
@@ -211,7 +211,7 @@ miolo_Sofia quer brincar.indd 13
 
 09/10/2024 09:18:51
 
-![13](./img/page_013.jpg)
+![13](./img/page_0013.jpg)
 
 ---
 
@@ -226,7 +226,7 @@ miolo_Sofia quer brincar.indd 14
 
 09/10/2024 09:18:51
 
-![14](./img/page_014.jpg)
+![14](./img/page_0014.jpg)
 
 ---
 
@@ -243,7 +243,7 @@ miolo_Sofia quer brincar.indd 15
 
 09/10/2024 09:18:51
 
-![15](./img/page_015.jpg)
+![15](./img/page_0015.jpg)
 
 ---
 
@@ -258,7 +258,7 @@ miolo_Sofia quer brincar.indd 16
 
 09/10/2024 09:18:51
 
-![16](./img/page_016.jpg)
+![16](./img/page_0016.jpg)
 
 ---
 
@@ -273,7 +273,7 @@ miolo_Sofia quer brincar.indd 17
 
 09/10/2024 09:18:52
 
-![17](./img/page_017.jpg)
+![17](./img/page_0017.jpg)
 
 ---
 
@@ -286,7 +286,7 @@ miolo_Sofia quer brincar.indd 18
 
 09/10/2024 09:18:52
 
-![18](./img/page_018.jpg)
+![18](./img/page_0018.jpg)
 
 ---
 
@@ -300,7 +300,7 @@ miolo_Sofia quer brincar.indd 19
 
 09/10/2024 09:18:52
 
-![19](./img/page_019.jpg)
+![19](./img/page_0019.jpg)
 
 ---
 
@@ -312,7 +312,7 @@ miolo_Sofia quer brincar.indd 20
 
 09/10/2024 09:18:52
 
-![20](./img/page_020.jpg)
+![20](./img/page_0020.jpg)
 
 ---
 
@@ -327,7 +327,7 @@ miolo_Sofia quer brincar.indd 21
 
 09/10/2024 09:18:52
 
-![21](./img/page_021.jpg)
+![21](./img/page_0021.jpg)
 
 ---
 
@@ -340,7 +340,7 @@ miolo_Sofia quer brincar.indd 22
 
 09/10/2024 09:18:52
 
-![22](./img/page_022.jpg)
+![22](./img/page_0022.jpg)
 
 ---
 
@@ -353,7 +353,7 @@ miolo_Sofia quer brincar.indd 23
 
 09/10/2024 09:18:52
 
-![23](./img/page_023.jpg)
+![23](./img/page_0023.jpg)
 
 ---
 
@@ -368,7 +368,7 @@ miolo_Sofia quer brincar.indd 24
 
 09/10/2024 09:18:52
 
-![24](./img/page_024.jpg)
+![24](./img/page_0024.jpg)
 
 ---
 
@@ -381,7 +381,7 @@ miolo_Sofia quer brincar.indd 25
 
 09/10/2024 09:18:52
 
-![25](./img/page_025.jpg)
+![25](./img/page_0025.jpg)
 
 ---
 
@@ -396,7 +396,7 @@ miolo_Sofia quer brincar.indd 26
 
 09/10/2024 09:18:52
 
-![26](./img/page_026.jpg)
+![26](./img/page_0026.jpg)
 
 ---
 
@@ -410,7 +410,7 @@ miolo_Sofia quer brincar.indd 27
 
 09/10/2024 09:18:53
 
-![27](./img/page_027.jpg)
+![27](./img/page_0027.jpg)
 
 ---
 
@@ -421,7 +421,7 @@ miolo_Sofia quer brincar.indd 28
 
 09/10/2024 09:18:54
 
-![28](./img/page_028.jpg)
+![28](./img/page_0028.jpg)
 
 ---
 
@@ -443,7 +443,7 @@ miolo_Sofia quer brincar.indd 29
 
 09/10/2024 09:18:54
 
-![29](./img/page_029.jpg)
+![29](./img/page_0029.jpg)
 
 ---
 
@@ -454,7 +454,7 @@ miolo_Sofia quer brincar.indd 30
 
 09/10/2024 09:18:55
 
-![30](./img/page_030.jpg)
+![30](./img/page_0030.jpg)
 
 ---
 
@@ -472,7 +472,7 @@ miolo_Sofia quer brincar.indd 31
 
 09/10/2024 09:18:55
 
-![31](./img/page_031.jpg)
+![31](./img/page_0031.jpg)
 
 ---
 
@@ -485,7 +485,7 @@ miolo_Sofia quer brincar.indd 32
 
 09/10/2024 09:18:55
 
-![32](./img/page_032.jpg)
+![32](./img/page_0032.jpg)
 
 ---
 
