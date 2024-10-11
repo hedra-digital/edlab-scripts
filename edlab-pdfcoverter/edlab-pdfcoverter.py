@@ -107,15 +107,16 @@ def rename_file(old_name, new_name):
 
 def main():
     # Parser de argumentos
-    parser = argparse.ArgumentParser(description="Remove o texto de um PDF, corta margens, e/ou converte páginas específicas em imagens.")
+    parser = argparse.ArgumentParser(description="Remove o texto de um PDF (opcional), corta margens, e/ou converte páginas específicas em imagens.")
     
     # Argumentos de entrada e saída
     parser.add_argument("-i", "--input", required=True, help="Caminho para o arquivo PDF de entrada.")
-    parser.add_argument("-o", "--output", required=True, help="Caminho para o arquivo PDF de saída após a remoção do texto.")
+    parser.add_argument("-o", "--output", required=True, help="Caminho para o arquivo PDF de saída.")
     parser.add_argument("-m", "--margins", help="Margens para o corte com pdfcrop. Use um valor ou quatro valores para margens separadas (esquerda, direita, cima, baixo).")
     parser.add_argument("-d", "--dir", help="Diretório onde as imagens serão salvas.")
     parser.add_argument("-p", "--pages", help="Intervalo de páginas para processar, por exemplo '1-3' ou '1'.")
     parser.add_argument("-f", "--format", default="jpeg", help="Formato da imagem de saída (jpeg ou png). Padrão: jpeg.")
+    parser.add_argument("-rt", "--remove-text", action='store_true', help="Remove o texto do PDF antes de cortar margens e converter em imagens.")
 
     # Parseia os argumentos
     args = parser.parse_args()
@@ -132,8 +133,12 @@ def main():
     else:
         input_pdf = args.input
 
-    # Remove o texto do PDF e gera o PDF sem texto
-    delete_text_from_pdf(input_pdf, args.output)
+    # Remove o texto do PDF apenas se a opção -rt estiver definida
+    if args.remove_text:
+        delete_text_from_pdf(input_pdf, args.output)
+    else:
+        # Se não for remover o texto, apenas copia o PDF para o output
+        rename_file(input_pdf, args.output)
 
     # Aplica o pdfcrop para cortar as margens do PDF final, apenas se a opção -m estiver definida
     if args.margins:
