@@ -47,11 +47,19 @@ Isso converterá apenas a página 1 do PDF em PNG.
 # Opções
 
 ```
--i / --input: Especifica o arquivo PDF de entrada.
--o / --output: Especifica o arquivo PDF de saída sem texto.
--d / --dir: Especifica o diretório onde as imagens PNG das páginas serão salvas.
--m / --margins: Para cropar antes de converter. Ex: -m '10 2 5 10' ou -m '10'
--f / --format: png, jpg etc. 
+  -h, --help            show this help message and exit
+  -i INPUT, --input INPUT
+                        Caminho para o arquivo PDF de entrada.
+  -o OUTPUT, --output OUTPUT
+                        Caminho para o arquivo PDF de saída.
+  -m MARGINS, --margins MARGINS
+                        Margens para o corte com pdfcrop. Use um valor ou quatro valores para margens separadas (esquerda, direita, cima, baixo).
+  -d DIR, --dir DIR     Diretório onde as imagens serão salvas.
+  -p PAGES, --pages PAGES
+                        Intervalo de páginas para processar, por exemplo '1-3' ou '1'.
+  -f FORMAT, --format FORMAT
+                        Formato da imagem de saída (jpeg ou png). Padrão: jpeg.
+  -rt, --remove-text    Remove o texto do PDF antes de cortar margens e converter em imagens.
 ```
 
 

@@ -10,4 +10,9 @@ O README.md deve ter as seguintes seções:
 
 * História (o que motivou a criação do script)
 * Dependências (para facilitar a instalação)
-* Opções (exemplo: "-p 1" conversão da página 1 somente.)
+* Opções (exemplo: "-p 1" conversão da página 1 somente. O ideal é que esse texto seja o _output_ de _command -h_)
+
+## Regras gerias
+
+Lembrar de criar um link para o chatgpt com o diálogo. 
+Exemplo: https://chatgpt.com/share/6709752c-80a0-8004-be01-d1d1b5a6033f
