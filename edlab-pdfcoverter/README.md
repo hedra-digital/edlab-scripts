@@ -63,4 +63,8 @@ As margens podem ser especificadas de duas formas:
 * Um único valor (exemplo: -m 10), que aplica o mesmo valor de margem em todos os lados.
 * Quatro valores separados (exemplo: -m '5 10 5 10'), aplicando valores separados para esquerda, direita, cima e baixo.
 
+## GPT
+
+https://chatgpt.com/share/6709752c-80a0-8004-be01-d1d1b5a6033f
+
 
