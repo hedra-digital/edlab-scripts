@@ -1,10 +1,13 @@
-# Como arquivar seu script?
+# Como escrever  seu script?
 
-1. Utilize como padrão de nome uma pequena explicação em inglês, com maiúsculas
-1. Crie uma pasta para cada script
-2. Crie um README.md dentro da pasta
-3. Escreva no arquivo a  "História" que motivou a redação do script
-4. Inclua as "Dependências" que precisam ser instaladas
-5. Inclua uma instrução sobre como rodar um exemplo
-6. Inclua uma pasta chamata "exemplos" com algo funcionando 
-7. Inclua alguns exemplos dentro de um `Makefile`.
+## Padrão de nome
+
+Utilize como padrão de nome uma pequena explicação em inglês, com maiúsculas, quando o script for muito específico. Agora, se ele for um script multiuso, nomeio como `edlab-algo`, como por exemplo `edlab-pdfcoverter`.
+
+## Regras para o README.md
+
+O README.md deve ter as seguintes seções:
+
+* História (o que motivou a criação do script)
+* Dependências (para facilitar a instalação)
+* Opções (exemplo: "-p 1" conversão da página 1 somente.)

@@ -41,14 +41,13 @@ def crop_pdf_with_pdfcrop(input_pdf, output_pdf, margins):
     except subprocess.CalledProcessError as e:
         logging.error(f"Erro ao executar pdfcrop: {e}")
 
-def convert_pdf_to_images(input_pdf, output_dir, page_range=None):
-    """Converte páginas específicas de um PDF em imagens PNG e salva no diretório especificado."""
-    logging.info(f"Convertendo {input_pdf} para imagens PNG no diretório {output_dir}")
+def convert_pdf_to_images(input_pdf, output_dir, format='jpeg', page_range=None):
+    """Converte páginas específicas de um PDF em imagens no formato especificado e salva no diretório."""
+    logging.info(f"Convertendo {input_pdf} para imagens {format} no diretório {output_dir}")
 
-    # Converte o PDF em imagens PNG
+    # Converte o PDF em imagens
     try:
         if page_range:
-            # Define as páginas a serem convertidas
             images = convert_from_path(input_pdf, first_page=page_range[0], last_page=page_range[1])
         else:
             images = convert_from_path(input_pdf)
@@ -65,8 +64,8 @@ def convert_pdf_to_images(input_pdf, output_dir, page_range=None):
         for i, image in enumerate(images):
             # Formata o número da página com zeros à esquerda
             page_num_str = str(i + 1).zfill(num_digits)
-            image_path = os.path.join(output_dir, f'page_{page_num_str}.png')
-            image.save(image_path, 'PNG')
+            image_path = os.path.join(output_dir, f'page_{page_num_str}.{format}')
+            image.save(image_path, format.upper())
             image_paths.append(image_path)
             logging.info(f"Página {i+1} salva como imagem: {image_path}")
 
@@ -108,14 +107,15 @@ def rename_file(old_name, new_name):
 
 def main():
     # Parser de argumentos
-    parser = argparse.ArgumentParser(description="Remove o texto de um PDF, corta margens, e/ou converte páginas específicas em imagens PNG.")
+    parser = argparse.ArgumentParser(description="Remove o texto de um PDF, corta margens, e/ou converte páginas específicas em imagens.")
     
     # Argumentos de entrada e saída
     parser.add_argument("-i", "--input", required=True, help="Caminho para o arquivo PDF de entrada.")
     parser.add_argument("-o", "--output", required=True, help="Caminho para o arquivo PDF de saída após a remoção do texto.")
     parser.add_argument("-m", "--margins", help="Margens para o corte com pdfcrop. Use um valor ou quatro valores para margens separadas (esquerda, direita, cima, baixo).")
-    parser.add_argument("-d", "--dir", help="Diretório onde as imagens PNG serão salvas (uma imagem por página).")
-    parser.add_argument("-p", "--pages", help="Intervalo de páginas para processar (remover texto, cortar margens e converter em imagens), por exemplo '1-3' ou '1'.")
+    parser.add_argument("-d", "--dir", help="Diretório onde as imagens serão salvas.")
+    parser.add_argument("-p", "--pages", help="Intervalo de páginas para processar, por exemplo '1-3' ou '1'.")
+    parser.add_argument("-f", "--format", default="jpeg", help="Formato da imagem de saída (jpeg ou png). Padrão: jpeg.")
 
     # Parseia os argumentos
     args = parser.parse_args()
@@ -142,9 +142,9 @@ def main():
         # Renomeia o PDF cortado de volta para output.pdf
         rename_file(cropped_output, args.output)
 
-    # Se o diretório de saída para as imagens for fornecido, converte o PDF (com ou sem corte) para imagens PNG
+    # Se o diretório de saída para as imagens for fornecido, converte o PDF (com ou sem corte) para imagens
     if args.dir:
-        convert_pdf_to_images(args.output, args.dir, page_range)
+        convert_pdf_to_images(args.output, args.dir, args.format.lower(), page_range)
 
 if __name__ == "__main__":
     main()
