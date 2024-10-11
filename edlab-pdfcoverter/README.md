@@ -1,6 +1,5 @@
 # Histórico
-No PNLD2026, precisamos remover textos dos PDFs para gerar imagens das ilustrãções 
-para o HTML.
+No PNLD2026, precisamos criar imagens a partir dos PDFs para para o HTML. Essas imagens precisavam ser cropadas e sem o texto do livro. 
 
 # Dependências
 ```
@@ -52,6 +51,7 @@ Isso converterá apenas a página 1 do PDF em PNG.
 -o / --output: Especifica o arquivo PDF de saída sem texto.
 -d / --dir: Especifica o diretório onde as imagens PNG das páginas serão salvas.
 -m / --margins: Para cropar antes de converter. Ex: -m '10 2 5 10' ou -m '10'
+-f / --format: png, jpg etc. 
 ```
 
 

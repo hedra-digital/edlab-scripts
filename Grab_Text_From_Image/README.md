@@ -1,5 +1,9 @@
 # Grab_Text_From_Image.py
 
+## Atenção
+
+Esse script não funciona muito bem se a font não for bem definida.
+
 ## História
 
 Estávamos preparando os HTMLs para o PNLD2026 e eu precisei tirar textos diretamente das imagens. 
