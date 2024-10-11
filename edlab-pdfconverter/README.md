@@ -76,3 +76,36 @@ As margens podem ser especificadas de duas formas:
 https://chatgpt.com/share/6709752c-80a0-8004-be01-d1d1b5a6033f
 
 
+## Install
+
+Se você usa bash, edite o arquivo .bashrc ou .bash_profile:
+
+```
+subl ~/.bashrc
+```
+
+Adicione a seguinte linha ao final do arquivo:
+```
+export PATH="$HOME/bin:$PATH"
+```
+
+Salve e feche o arquivo. Depois, rode:
+```
+source ~/.bashrc
+```
+
+Se você usa zsh, edite o arquivo .zshrc:
+```
+subl ~/.zshrc
+```
+
+Adicione a mesma linha:
+```
+export PATH="$HOME/bin:$PATH"
+```
+
+Salve e rode:
+```
+source ~/.zshrc
+```
+
