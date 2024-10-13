@@ -1,4 +1,0 @@
-file-001.txt 	asfas.txt
-file-004.txt 	abacaxi.txt
-file-010.txt	meias.txt
-file-145.txt	bola.txt
