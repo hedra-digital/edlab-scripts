@@ -6,16 +6,66 @@ import argparse
 from pathlib import Path
 from colorama import Fore, Style, init
 
-# Inicializa o colorama
+# Initialize colorama
 init(autoreset=True)
 
-# Função para renomear um arquivo aplicando alinhamento das casas numéricas
+# Function to rename a file using a mapping table
+def rename_with_table(filepath, mapping, dry_run, prefix_str=""):
+    original_filename = filepath.name
+    if original_filename in mapping:
+        new_filename = mapping[original_filename]
+        output = f"{prefix_str}{Fore.RED}{original_filename} -> {Fore.GREEN}{new_filename}"
+        if dry_run:
+            print(output)
+        else:
+            new_path = filepath.with_name(new_filename)
+            filepath.rename(new_path)
+            print(output)
+        return output
+    else:
+        return f"{prefix_str}{Fore.YELLOW}{original_filename} (no change)"
+
+# Function to load the renaming table
+def load_rename_table(table_path):
+    mapping = {}
+    with open(table_path, 'r') as table_file:
+        for line in table_file:
+            parts = line.strip().split()
+            if len(parts) == 2:
+                old_name, new_name = parts
+                mapping[old_name] = new_name
+    return mapping
+
+# Function to display the directory tree and process files based on the table
+def process_tree_with_table(directory, mapping, dry_run, prefix=None, suffix=None):
+    output = []
+    
+    def print_tree(root, prefix_str=""):
+        contents = list(Path(root).iterdir())
+        pointers = ['├── '] * (len(contents) - 1) + ['└── ']
+
+        for pointer, path in zip(pointers, contents):
+            if path.is_dir():
+                output.append(f"{prefix_str}{pointer}{path.name}/")
+                print_tree(path, prefix_str + "    " if pointer == '└── ' else prefix_str + "│   ")
+            else:
+                filename = path.name
+                if (prefix and not filename.startswith(prefix)) or (suffix and not filename.endswith(suffix)):
+                    continue  # Filter files that don't match prefix or suffix pattern
+                result = rename_with_table(path, mapping, dry_run, prefix_str + pointer)
+                if result:
+                    output.append(result)
+    
+    print_tree(directory)
+    return "\n".join(output)
+
+# Function to rename a file by aligning numerical place values
 def align_place_values(filename, max_digits):
     pattern = r"(\d+)"
     numbers = re.findall(pattern, filename)
     
     if not numbers:
-        return filename  # Se não há números, retorne o nome do arquivo original
+        return filename  # If no numbers, return the original filename
 
     def pad_number(match):
         return match.group(0).zfill(max_digits)
@@ -24,7 +74,7 @@ def align_place_values(filename, max_digits):
     
     return new_filename
 
-# Função para encontrar o maior número de dígitos em todos os arquivos no diretório
+# Function to find the maximum number of digits in all files in the directory
 def find_max_digits_in_directory(directory, recursive, prefix=None, suffix=None):
     max_digits = 0
     pattern = r"(\d+)"
@@ -50,8 +100,8 @@ def find_max_digits_in_directory(directory, recursive, prefix=None, suffix=None)
 
     return max_digits
 
-# Função para processar um único arquivo
-def process_file(filepath, max_digits, dry_run, show_changes):
+# Function to process a single file (for place value alignment)
+def process_file_pva(filepath, max_digits, dry_run, show_changes):
     original_filename = filepath.name
     new_filename = align_place_values(original_filename, max_digits)
     
@@ -66,8 +116,8 @@ def process_file(filepath, max_digits, dry_run, show_changes):
         if show_changes:
             print(f"{Fore.YELLOW}{filepath} (no change)")
 
-# Função para exibir a árvore de diretórios e as mudanças planejadas
-def show_tree(directory, max_digits, prefix=None, suffix=None):
+# Function to display the directory tree and planned changes (for place value alignment)
+def show_tree_pva(directory, max_digits, prefix=None, suffix=None):
     output = []
     def print_tree(root, prefix_str=""):
         contents = list(Path(root).iterdir())
@@ -79,7 +129,7 @@ def show_tree(directory, max_digits, prefix=None, suffix=None):
             else:
                 filename = path.name
                 if (prefix and not filename.startswith(prefix)) or (suffix and not filename.endswith(suffix)):
-                    continue  # Filtra arquivos que não seguem o padrão de prefixo ou sufixo
+                    continue  # Filter files that don't match prefix or suffix pattern
                 new_filename = align_place_values(filename, max_digits)
                 if new_filename != filename:
                     output.append(f"{prefix_str}{pointer}{Fore.RED}{filename} -> {Fore.GREEN}{new_filename}")
@@ -89,12 +139,13 @@ def show_tree(directory, max_digits, prefix=None, suffix=None):
     print_tree(directory)
     return "\n".join(output)
 
-# Função principal
+# Main function
 def main():
-    parser = argparse.ArgumentParser(description="File manager to align numerical place values in filenames.")
+    parser = argparse.ArgumentParser(description="File manager to rename files based on a table or align numerical place values.")
     parser.add_argument("paths", nargs="+", help="File(s) or directory to process.")
     parser.add_argument("--tree", action="store_true", help="Process directories recursively.")
     parser.add_argument("--align-place-values", "-pva", action="store_true", help="Align numerical place values in filenames.")
+    parser.add_argument("--table-name", "-tn", type=str, help="File containing a table of old and new filenames.")
     parser.add_argument("--prefix-pattern", "-pp", type=str, help="Only process files that start with this prefix.")
     parser.add_argument("--suffix-pattern", "-sp", type=str, help="Only process files that end with this suffix.")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done, without making any changes.")
@@ -104,51 +155,68 @@ def main():
 
     target_paths = [Path(path) for path in args.paths]
 
-    # Verifica a existência dos arquivos/diretórios fornecidos
+    # Check if provided files/directories exist
     for target_path in target_paths:
         if not target_path.exists():
             print(f"Error: '{target_path}' does not exist.")
             return
 
-    # Verifica o diretório do primeiro arquivo ou diretório para encontrar o maior número de dígitos
-    parent_directory = target_paths[0].parent if target_paths[0].is_file() else target_paths[0]
-    max_digits = find_max_digits_in_directory(parent_directory, recursive=args.tree, prefix=args.prefix_pattern, suffix=args.suffix_pattern)
-    print(f"Aligning numbers to {max_digits} digits")
+    # If table option is provided, load the renaming table
+    if args.table_name:
+        mapping = load_rename_table(args.table_name)
+        print(f"Loaded renaming table from {args.table_name}")
 
-    # Mostra a árvore de mudanças
-    if args.show_changes:
         for target_path in target_paths:
             if target_path.is_dir():
-                tree_output = show_tree(target_path, max_digits, prefix=args.prefix_pattern, suffix=args.suffix_pattern)
+                print(f"Processing directory: {target_path}")
+                tree_output = process_tree_with_table(target_path, mapping, args.dry_run, prefix=args.prefix_pattern, suffix=args.suffix_pattern)
                 print(tree_output)
-        return  # Saímos aqui para não fazer alterações reais quando estamos apenas mostrando as mudanças
+            elif target_path.is_file():
+                # If it's a single file, apply the mapping
+                rename_with_table(target_path, mapping, args.dry_run)
+        return
 
-    # Processa cada arquivo ou diretório especificado
-    for target_path in target_paths:
-        if target_path.is_file():
-            if (args.prefix_pattern and not target_path.name.startswith(args.prefix_pattern)) or \
-               (args.suffix_pattern and not target_path.name.endswith(args.suffix_pattern)):
-                continue
-            process_file(target_path, max_digits, args.dry_run, args.show_changes)
-        elif target_path.is_dir():
-            if args.tree:
-                for root, _, files in os.walk(target_path):
-                    for file in files:
-                        filepath = Path(root) / file
-                        if (args.prefix_pattern and not file.startswith(args.prefix_pattern)) or \
-                           (args.suffix_pattern and not file.endswith(args.suffix_pattern)):
-                            continue
-                        process_file(filepath, max_digits, args.dry_run, args.show_changes)
+    # Otherwise, use the place value alignment process
+    if args.align_place_values:
+        # Find the directory of the first file or directory to find the maximum number of digits
+        parent_directory = target_paths[0].parent if target_paths[0].is_file() else target_paths[0]
+        max_digits = find_max_digits_in_directory(parent_directory, recursive=args.tree, prefix=args.prefix_pattern, suffix=args.suffix_pattern)
+        print(f"Aligning numbers to {max_digits} digits")
+
+        # Show the tree of changes
+        if args.show_changes:
+            for target_path in target_paths:
+                if target_path.is_dir():
+                    tree_output = show_tree_pva(target_path, max_digits, prefix=args.prefix_pattern, suffix=args.suffix_pattern)
+                    print(tree_output)
+            return  # Exit here to avoid making actual changes when just showing changes
+
+        # Process each specified file or directory
+        for target_path in target_paths:
+            if target_path.is_file():
+                if (args.prefix_pattern and not target_path.name.startswith(args.prefix_pattern)) or \
+                   (args.suffix_pattern and not target_path.name.endswith(args.suffix_pattern)):
+                    continue
+                process_file_pva(target_path, max_digits, args.dry_run, args.show_changes)
+            elif target_path.is_dir():
+                if args.tree:
+                    for root, _, files in os.walk(target_path):
+                        for file in files:
+                            filepath = Path(root) / file
+                            if (args.prefix_pattern and not file.startswith(args.prefix_pattern)) or \
+                               (args.suffix_pattern and not file.endswith(args.suffix_pattern)):
+                                continue
+                            process_file_pva(filepath, max_digits, args.dry_run, args.show_changes)
+                else:
+                    for file in os.listdir(target_path):
+                        filepath = Path(target_path) / file
+                        if filepath.is_file():
+                            if (args.prefix_pattern and not file.startswith(args.prefix_pattern)) or \
+                               (args.suffix_pattern and not file.endswith(args.suffix_pattern)):
+                                continue
+                            process_file_pva(filepath, max_digits, args.dry_run, args.show_changes)
             else:
-                for file in os.listdir(target_path):
-                    filepath = Path(target_path) / file
-                    if filepath.is_file():
-                        if (args.prefix_pattern and not file.startswith(args.prefix_pattern)) or \
-                           (args.suffix_pattern and not file.endswith(args.suffix_pattern)):
-                            continue
-                        process_file(filepath, max_digits, args.dry_run, args.show_changes)
-        else:
-            print(f"Error: '{target_path}' is neither a file nor a directory.")
+                print(f"Error: '{target_path}' is neither a file nor a directory.")
 
 if __name__ == "__main__":
     main()
