@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+
+import os
+import re
+import argparse
+from pathlib import Path
+from colorama import Fore, Style, init
+
+# Inicializa o colorama
+init(autoreset=True)
+
+# Função para renomear um arquivo aplicando alinhamento das casas numéricas
+def align_place_values(filename, max_digits):
+    pattern = r"(\d+)"
+    numbers = re.findall(pattern, filename)
+    
+    if not numbers:
+        return filename  # Se não há números, retorne o nome do arquivo original
+
+    def pad_number(match):
+        return match.group(0).zfill(max_digits)
+
+    new_filename = re.sub(pattern, pad_number, filename)
+    
+    return new_filename
+
+# Função para encontrar o maior número de dígitos em todos os arquivos no diretório
+def find_max_digits_in_directory(directory, prefix=None, suffix=None):
+    max_digits = 0
+    pattern = r"(\d+)"
+
+    for file in os.listdir(directory):
+        filepath = Path(directory) / file
+        if filepath.is_file():
+            if (prefix and not file.startswith(prefix)) or (suffix and not file.endswith(suffix)):
+                continue
+            numbers = re.findall(pattern, file)
+            if numbers:
+                max_digits = max(max_digits, max(len(num) for num in numbers))
+
+    return max_digits
+
+# Função para renomear arquivos e exibir a árvore
+def process_file(filepath, max_digits, dry_run, show_changes, prefix_str=""):
+    original_filename = filepath.name
+    new_filename = align_place_values(original_filename, max_digits)
+    
+    if new_filename != original_filename:
+        output = f"{prefix_str}{Fore.RED}{original_filename} -> {Fore.GREEN}{new_filename}"
+        if dry_run:
+            print(output)
+        else:
+            new_path = filepath.with_name(new_filename)
+            filepath.rename(new_path)
+            print(output)
+        return output
+    else:
+        return f"{prefix_str}{Fore.YELLOW}{original_filename} (no change)"
+
+# Função para exibir a árvore de diretórios e processar os arquivos
+def process_tree(directory, dry_run, show_changes, prefix=None, suffix=None):
+    output = []
+    
+    def print_tree(root, prefix_str=""):
+        contents = list(Path(root).iterdir())
+        pointers = ['├── '] * (len(contents) - 1) + ['└── ']
+        
+        # Para cada diretório, encontramos o número máximo de dígitos separadamente
+        max_digits = find_max_digits_in_directory(root, prefix=prefix, suffix=suffix)
+
+        for pointer, path in zip(pointers, contents):
+            if path.is_dir():
+                output.append(f"{prefix_str}{pointer}{path.name}/")
+                print_tree(path, prefix_str + "    " if pointer == '└── ' else prefix_str + "│   ")
+            else:
+                filename = path.name
+                if (prefix and not filename.startswith(prefix)) or (suffix and not filename.endswith(suffix)):
+                    continue  # Filtra arquivos que não seguem o padrão de prefixo ou sufixo
+                result = process_file(path, max_digits, dry_run, show_changes, prefix_str + pointer)
+                if result:
+                    output.append(result)
+    
+    print_tree(directory)
+    return "\n".join(output)
+
+# Função principal
+def main():
+    parser = argparse.ArgumentParser(description="File manager to align numerical place values in filenames.")
+    parser.add_argument("paths", nargs="+", help="File(s) or directory to process.")
+    parser.add_argument("--tree", action="store_true", help="Process directories recursively.")
+    parser.add_argument("--align-place-values", "-pva", action="store_true", help="Align numerical place values in filenames.")
+    parser.add_argument("--prefix-pattern", "-pp", type=str, help="Only process files that start with this prefix.")
+    parser.add_argument("--suffix-pattern", "-sp", type=str, help="Only process files that end with this suffix.")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be done, without making any changes.")
+    parser.add_argument("--show-changes", action="store_true", help="Display a tree of changes that will be made.")
+    
+    args = parser.parse_args()
+
+    target_paths = [Path(path) for path in args.paths]
+
+    # Verifica a existência dos arquivos/diretórios fornecidos
+    for target_path in target_paths:
+        if not target_path.exists():
+            print(f"Error: '{target_path}' does not exist.")
+            return
+
+    # Caso contrário, tratamos como diretório e aplicamos recursivamente se necessário
+    for target_path in target_paths:
+        if target_path.is_dir():
+            print(f"Processing directory: {target_path}")
+            tree_output = process_tree(target_path, args.dry_run, args.show_changes, prefix=args.prefix_pattern, suffix=args.suffix_pattern)
+            print(tree_output)
+
+if __name__ == "__main__":
+    main()
