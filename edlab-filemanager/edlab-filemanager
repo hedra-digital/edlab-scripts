@@ -9,16 +9,37 @@ from colorama import Fore, Style, init
 # Initialize colorama
 init(autoreset=True)
 
+# Function to check if a file exists and ask for overwrite permission
+def check_overwrite(new_path, ignore_overwrites):
+    if new_path.exists() and not ignore_overwrites:
+        while True:
+            response = input(f"{Fore.YELLOW}Warning: {new_path} already exists. Overwrite? (y/n/q) ").lower()
+            if response == 'y':
+                return True
+            elif response == 'n':
+                return False
+            elif response == 'q':
+                print("Operation cancelled by user.")
+                exit(0)
+            else:
+                print("Invalid input. Please enter 'y' for yes, 'n' for no, or 'q' to quit.")
+    return True
+
 # Function to rename a file using a mapping table
-def rename_with_table(filepath, mapping, dry_run, prefix_str=""):
+def rename_with_table(filepath, mapping, dry_run, ignore_overwrites, prefix_str=""):
     original_filename = filepath.name
     if original_filename in mapping:
         new_filename = mapping[original_filename]
+        new_path = filepath.with_name(new_filename)
+        
+        if new_path.exists() and not ignore_overwrites and not dry_run:
+            if not check_overwrite(new_path, ignore_overwrites):
+                return f"{prefix_str}{Fore.YELLOW}{original_filename} (skipped overwrite)"
+        
         output = f"{prefix_str}{Fore.RED}{original_filename} -> {Fore.GREEN}{new_filename}"
         if dry_run:
             return output
         else:
-            new_path = filepath.with_name(new_filename)
             filepath.rename(new_path)
             return output
     else:
@@ -36,7 +57,7 @@ def load_rename_table(table_path):
     return mapping
 
 # Function to display the directory tree and process files based on the table
-def process_tree_with_table(directory, mapping, dry_run, recursive=False, prefix=None, suffix=None):
+def process_tree_with_table(directory, mapping, dry_run, ignore_overwrites, recursive=False, prefix=None, suffix=None):
     output = []
     
     def print_tree(root, prefix_str=""):
@@ -52,7 +73,7 @@ def process_tree_with_table(directory, mapping, dry_run, recursive=False, prefix
                 filename = path.name
                 if (prefix and not filename.startswith(prefix)) or (suffix and not filename.endswith(suffix)):
                     continue  # Filter files that don't match prefix or suffix pattern
-                result = rename_with_table(path, mapping, dry_run, prefix_str + pointer)
+                result = rename_with_table(path, mapping, dry_run, ignore_overwrites, prefix_str + pointer)
                 output.append(result)
     
     print_tree(directory)
@@ -98,21 +119,26 @@ def find_max_digits_in_directory(directory, recursive, prefix=None, suffix=None)
     return max_digits
 
 # Function to process a single file (for place value alignment)
-def process_file_pva(filepath, max_digits, dry_run, prefix_str=""):
+def process_file_pva(filepath, max_digits, dry_run, ignore_overwrites, prefix_str=""):
     original_filename = filepath.name
     new_filename = align_place_values(original_filename, max_digits)
     
     if new_filename != original_filename:
+        new_path = filepath.with_name(new_filename)
+        
+        if new_path.exists() and not ignore_overwrites and not dry_run:
+            if not check_overwrite(new_path, ignore_overwrites):
+                return f"{prefix_str}{Fore.YELLOW}{original_filename} (skipped overwrite)"
+        
         output = f"{prefix_str}{Fore.RED}{original_filename} -> {Fore.GREEN}{new_filename}"
         if not dry_run:
-            new_path = filepath.with_name(new_filename)
             filepath.rename(new_path)
         return output
     else:
         return f"{prefix_str}{Fore.YELLOW}{original_filename} (no change)"
 
 # Function to display the directory tree and planned changes (for place value alignment)
-def show_tree_pva(directory, max_digits, dry_run, recursive=False, prefix=None, suffix=None):
+def show_tree_pva(directory, max_digits, dry_run, ignore_overwrites, recursive=False, prefix=None, suffix=None):
     output = []
     def print_tree(root, prefix_str=""):
         contents = sorted(list(Path(root).iterdir()), key=lambda x: (x.is_file(), x.name.lower()))
@@ -126,7 +152,7 @@ def show_tree_pva(directory, max_digits, dry_run, recursive=False, prefix=None, 
                 filename = path.name
                 if (prefix and not filename.startswith(prefix)) or (suffix and not filename.endswith(suffix)):
                     continue  # Filter files that don't match prefix or suffix pattern
-                result = process_file_pva(path, max_digits, dry_run, prefix_str + pointer)
+                result = process_file_pva(path, max_digits, dry_run, ignore_overwrites, prefix_str + pointer)
                 output.append(result)
     
     print_tree(directory)
@@ -142,6 +168,7 @@ def main():
     parser.add_argument("--prefix-pattern", "-pp", type=str, help="Only process files that start with this prefix.")
     parser.add_argument("--suffix-pattern", "-sp", type=str, help="Only process files that end with this suffix.")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done, without making any changes.")
+    parser.add_argument("--ignore-overwrites", action="store_true", help="Ignore potential overwrites without asking.")
     
     args = parser.parse_args()
 
@@ -161,11 +188,11 @@ def main():
         for target_path in target_paths:
             if target_path.is_dir():
                 print(f"Processing directory: {target_path}")
-                tree_output = process_tree_with_table(target_path, mapping, args.dry_run, recursive=args.tree, prefix=args.prefix_pattern, suffix=args.suffix_pattern)
+                tree_output = process_tree_with_table(target_path, mapping, args.dry_run, args.ignore_overwrites, recursive=args.tree, prefix=args.prefix_pattern, suffix=args.suffix_pattern)
                 print(tree_output)
             elif target_path.is_file():
                 # If it's a single file, apply the mapping
-                result = rename_with_table(target_path, mapping, args.dry_run)
+                result = rename_with_table(target_path, mapping, args.dry_run, args.ignore_overwrites)
                 print(result)
         return
 
@@ -178,13 +205,13 @@ def main():
 
         for target_path in target_paths:
             if target_path.is_dir():
-                tree_output = show_tree_pva(target_path, max_digits, args.dry_run, recursive=args.tree, prefix=args.prefix_pattern, suffix=args.suffix_pattern)
+                tree_output = show_tree_pva(target_path, max_digits, args.dry_run, args.ignore_overwrites, recursive=args.tree, prefix=args.prefix_pattern, suffix=args.suffix_pattern)
                 print(tree_output)
             elif target_path.is_file():
                 if (args.prefix_pattern and not target_path.name.startswith(args.prefix_pattern)) or \
                    (args.suffix_pattern and not target_path.name.endswith(args.suffix_pattern)):
                     continue
-                result = process_file_pva(target_path, max_digits, args.dry_run)
+                result = process_file_pva(target_path, max_digits, args.dry_run, args.ignore_overwrites)
                 print(result)
 
 if __name__ == "__main__":
