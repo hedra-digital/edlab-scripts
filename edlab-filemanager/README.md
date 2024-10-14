@@ -1,6 +1,6 @@
 # Histórico
 
-Precisávamos o tempo todo corrigir padrões de arquivos dentro de diretórios. Exemplo: page-1.png para page-001.png. Ou crocar ou remover um sufixo. Milhares de arquivos!
+Precisávamos o tempo todo corrigir padrões de arquivos dentro de diretórios. Exemplo: page-1.png para page-001.png. Ou cropar e remover sufixos. Milhares de arquivos!
 
 # Dependências
 
