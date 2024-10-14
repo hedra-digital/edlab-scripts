@@ -25,7 +25,7 @@ Este script Python oferece funcionalidades avançadas para gerenciar e renomear 
 ### Uso
 
 ```
-edlab-filemanager [opções] caminho1 [caminho2 ...]
+edlab-filemanager [opções] arquivo1 arquivo2 | caminho1 [caminho2 ...]
 ```
 
 ### Opções
