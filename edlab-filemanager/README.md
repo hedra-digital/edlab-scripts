@@ -46,7 +46,7 @@ edlab-filemanager [opções] caminho1 [caminho2 ...]
  edlab-filemanager --table-name="nomes.list" /caminho/para/diretorio
 ```
 
-2. Alinhar valores numéricos em nomes de arquivos dentro de pastas:
+2. Alinhar valores numéricos em nomes de arquivos dentro de pastas (--dry-run para verificar o que será executado):
 
 ```
  edlab-filemanager --tree --dry-run --table-name renaming_table.txt /caminho/para/diretorio
@@ -59,6 +59,7 @@ edlab-filemanager [opções] caminho1 [caminho2 ...]
 
 ## Notas
 
+- Cuidado ao rodar para não perder arquivos!
 - O script usa colorama para saída colorida no terminal.
 - Sempre faça um backup dos seus arquivos antes de executar operações de renomeação em massa.
 
