@@ -13,6 +13,14 @@ sudo pacman -S texlive-core # para o pdfcrop
 
 ```
 
+## Instalação no Ubuntu
+
+```
+sudo apt update
+
+pip3 install --break-system-packages pdf2image Pillow PyPDF2
+```
+
 # Descrição
 
 
