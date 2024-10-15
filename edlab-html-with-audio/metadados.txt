@@ -1,0 +1,6 @@
+title=Título do livro
+description=Pequeno resumo do livro
+author=Nomes dos autores e ilustradores
+isbn=ISBN da obra
+copyrightYear=Ano de edição da obra
+publisher=Selo editorial da obra
