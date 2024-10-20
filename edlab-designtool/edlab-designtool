@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+
+import argparse
+from PIL import Image, ImageOps
+import os
+import glob
+
+def add_border(image, border_width, color):
+    return ImageOps.expand(image, border=border_width, fill=color)
+
+def process_image(input_path, output_directory, background_color, background_size, border_width=1):
+    with Image.open(input_path) as book_cover:
+        # Adiciona uma borda fina preta
+        book_cover_with_border = add_border(book_cover, border_width, "black")
+        
+        output_image = Image.new("RGB", background_size, background_color)
+        
+        book_width, book_height = book_cover_with_border.size
+        x = (background_size[0] - book_width) // 2
+        y = (background_size[1] - book_height) // 2
+        
+        output_image.paste(book_cover_with_border, (x, y))
+        
+        base_name = os.path.basename(input_path)
+        output_name = f"{os.path.splitext(base_name)[0]}_square.png"
+        
+        if output_directory:
+            os.makedirs(output_directory, exist_ok=True)
+            output_path = os.path.join(output_directory, output_name)
+        else:
+            output_path = os.path.join(os.path.dirname(input_path), output_name)
+        
+        output_image.save(output_path)
+        print(f"Processed: {output_path}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Process book cover images to center them on a square background.")
+    parser.add_argument("input", nargs="*", help="Input image file(s) or wildcard pattern")
+    parser.add_argument("-i", "--input-dir", help="Input directory for images")
+    parser.add_argument("-o", "--output-dir", help="Output directory for processed images")
+    parser.add_argument("-b", "--border-width", type=int, default=1, help="Width of the black border (default: 1)")
+    
+    args = parser.parse_args()
+
+    project_directory = os.path.dirname(os.path.abspath(__file__))
+    
+    if args.input_dir:
+        input_directory = args.input_dir
+    else:
+        input_directory = os.path.join(project_directory, "input_images")
+    
+    output_directory = args.output_dir
+
+    background_color = (233, 234, 236)
+    background_size = (400, 400)
+
+    if args.input:
+        for pattern in args.input:
+            if os.path.isfile(pattern):
+                # Single file processing
+                if pattern.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    process_image(pattern, output_directory, background_color, background_size, args.border_width)
+            else:
+                # Wildcard pattern processing
+                for input_path in glob.glob(pattern):
+                    if input_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+                        process_image(input_path, output_directory, background_color, background_size, args.border_width)
+    else:
+        # Process all files in the input directory
+        for image_name in os.listdir(input_directory):
+            if image_name.lower().endswith(('.png', '.jpg', '.jpeg')):
+                input_path = os.path.join(input_directory, image_name)
+                process_image(input_path, output_directory, background_color, background_size, args.border_width)
+
+    print("All images have been processed and saved.")
+
+if __name__ == "__main__":
+    main()
