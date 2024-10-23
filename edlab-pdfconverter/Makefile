@@ -15,3 +15,4 @@ clean:
 	-rm img1 -rf
 	-rm img2 -rf
 	-rm img3 -rf
+	-rm *pages*
