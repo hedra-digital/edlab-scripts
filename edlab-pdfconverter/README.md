@@ -79,41 +79,11 @@ As margens podem ser especificadas de duas formas:
 * Um único valor (exemplo: -m 10), que aplica o mesmo valor de margem em todos os lados.
 * Quatro valores separados (exemplo: -m '5 10 5 10'), aplicando valores separados para esquerda, direita, cima e baixo.
 
-## GPT
-
-https://chatgpt.com/share/6709752c-80a0-8004-be01-d1d1b5a6033f
 
 
-## Install
+## Makefine
 
-Se você usa bash, edite o arquivo .bashrc ou .bash_profile:
-
-```
-subl ~/.bashrc
-```
-
-Adicione a seguinte linha ao final do arquivo:
-```
-export PATH="$HOME/bin:$PATH"
-```
-
-Salve e feche o arquivo. Depois, rode:
-```
-source ~/.bashrc
-```
-
-Se você usa zsh, edite o arquivo .zshrc:
-```
-subl ~/.zshrc
-```
-
-Adicione a mesma linha:
-```
-export PATH="$HOME/bin:$PATH"
-```
-
-Salve e rode:
-```
-source ~/.zshrc
-```
-
+`make install`  : para instalar
+`make test` : para testar
+`make clean` : para limpar os testes
+ 
