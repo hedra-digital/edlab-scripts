@@ -27,19 +27,19 @@ pip3 install --break-system-packages pdf2image Pillow PyPDF2
 ## Remover o texto do PDF e dar um crop no pdf final
 
 ```
-./Delete_Texts_From_PDF_And_Convert_To_PNG_After_Crop.py -i input.pdf -o output.pdf -d output_images -m '10 10 10 10'
+./edlab-pdfconverter -i input.pdf -o output.pdf -d output_images -m '10 10 10 10'
 ```
 
 ## Remover o texto do PDF e converter todas as páginas para PNG:
 ```
-./Delete_Texts_From_PDF_And_Convert_To_PNG_After_Crop.py -i input.pdf -o output.pdf -d img
+./edlab-pdfconverter -i input.pdf -o output.pdf -d img
 ```
 
 Isso vai gerar o arquivo output.pdf e converter todas as páginas do PDF para imagens PNG no diretório img.
 
 ## Remover o texto e converter apenas algumas páginas (ex: 1 a 3):
 ```
-./Delete_Texts_From_PDF_And_Convert_To_PNG_After_Crop.py -i input.pdf -o output.pdf -d img -p 1-3
+./edlab-pdfconverter -i input.pdf -o output.pdf -d img -p 1-3
 ```
 
 Isso irá converter apenas as páginas 1 a 3 do PDF para PNG no diretório img.
@@ -47,7 +47,7 @@ Isso irá converter apenas as páginas 1 a 3 do PDF para PNG no diretório img.
 ## Remover o texto e converter apenas uma página (ex: página 1):
 
 ```
-./Delete_Texts_From_PDF_And_Convert_To_PNG_After_Crop.py -i input.pdf -o output.pdf -d img -p 1
+./edlab-pdfconverter -i input.pdf -o output.pdf -d img -p 1
 ```
 
 Isso converterá apenas a página 1 do PDF em PNG.
