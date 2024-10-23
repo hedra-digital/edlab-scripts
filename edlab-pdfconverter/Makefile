@@ -1,7 +1,9 @@
+install:
+	-sudo cp edlab-pdfconverter /usr/local/bin
 test:
-	echo "=== TESTE 1: ====================================================="
-	./edlab-pdfconverter -i input.pdf -o output1.pdf -p 1-3 -d img -m '10 10 10 10'
-	echo "=== TESTE 4: Juntar pdfs ========================================="
+	echo "=== TESTE 1: cropar, arrancar páginas, remover texto e converter para png ======="
+	./edlab-pdfconverter -i input.pdf -o output1.pdf -p 1-3 -rt -d img -m '10 10 10 10'
+	echo "=== TESTE 2: Juntar pdfs ========================================================"
 	./edlab-pdfconverter -i *.pdf -j  -o output2.pdf
 
 clean:
