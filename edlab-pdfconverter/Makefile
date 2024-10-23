@@ -4,7 +4,7 @@ test:
 	echo "=== TESTE 1: cropar, arrancar páginas, remover texto e converter para png ======="
 	./edlab-pdfconverter -i input.pdf -o output1.pdf -p 1-3 -rt -d img -m '10 10 10 10'
 	echo "=== TESTE 2: Juntar pdfs ========================================================"
-	./edlab-pdfconverter -i *.pdf -j  -o output2.pdf
+	./edlab-pdfconverter -i input.pdf BLANK input.pdf -j  -o output.pdf
 
 clean:
 	-rm output_images -rf

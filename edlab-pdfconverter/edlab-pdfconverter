@@ -10,6 +10,7 @@ from pdf2image import convert_from_path
 # Configuração do logging para depuração
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
 def delete_text_from_pdf(input_pdf, output_pdf):
     """Remove o texto de um PDF mantendo as imagens usando Ghostscript."""
     gs_command = [
@@ -136,6 +137,7 @@ def generate_output_filename(input_path, suffix=""):
     if directory:
         return os.path.join(directory, new_name)
     return new_name
+
 def find_pdf_files(input_paths):
     """
     Encontra arquivos PDF baseado nos caminhos de entrada.
@@ -201,14 +203,147 @@ def merge_pdfs(input_files, output_file):
         logging.error(f"Erro ao unir PDFs: {str(e)}")
         return False
 
+
+def get_pdf_sequence_info(input_sequence):
+    """
+    Analisa a sequência de entrada e retorna informações sobre os PDFs.
+    
+    Args:
+        input_sequence: Lista de arquivos PDF e BLANKs
+    
+    Returns:
+        dict: Informações sobre a sequência, incluindo tamanho padrão das páginas
+    """
+    pdf_info = {
+        'page_size': None,
+        'pdf_files': [],
+        'total_pdfs': 0
+    }
+    
+    # Primeiro, coleta todos os arquivos PDF válidos
+    for item in input_sequence:
+        if item.lower().endswith('.pdf'):
+            if os.path.exists(item):
+                pdf_info['pdf_files'].append(item)
+                # Pega o tamanho do primeiro PDF encontrado
+                if pdf_info['page_size'] is None:
+                    try:
+                        reader = PdfReader(item)
+                        if len(reader.pages) > 0:
+                            page = reader.pages[0]
+                            pdf_info['page_size'] = (
+                                float(page.mediabox.width),
+                                float(page.mediabox.height)
+                            )
+                            logging.info(f"Tamanho padrão de página definido: {pdf_info['page_size']}")
+                    except Exception as e:
+                        logging.warning(f"Erro ao ler tamanho do PDF {item}: {e}")
+    
+    pdf_info['total_pdfs'] = len(pdf_info['pdf_files'])
+    
+    # Se não conseguiu determinar o tamanho, usa A4 como padrão
+    if pdf_info['page_size'] is None:
+        pdf_info['page_size'] = (595, 842)  # A4 em pontos
+        logging.info("Usando tamanho A4 padrão para páginas em branco")
+    
+    return pdf_info
+
+def merge_pdfs_with_blanks(input_sequence, output_file):
+    """
+    Junta PDFs inserindo páginas em branco onde especificado.
+    Usa um tamanho consistente para todas as páginas em branco.
+    """
+    merger = PdfWriter()
+    pdfs_added = 0
+    
+    try:
+        # Obtém informações sobre a sequência de PDFs
+        sequence_info = get_pdf_sequence_info(input_sequence)
+        
+        if sequence_info['total_pdfs'] < 2:
+            raise ValueError("São necessários pelo menos 2 arquivos PDF para juntar")
+        
+        # Usa o mesmo tamanho para todas as páginas em branco
+        blank_page_size = sequence_info['page_size']
+        logging.info(f"Usando tamanho consistente para páginas em branco: {blank_page_size}")
+        
+        # Cria uma única página em branco que será reutilizada
+        blank_page = create_blank_page(blank_page_size)
+        
+        for item in input_sequence:
+            if item.lower() == "blank":
+                logging.info(f"Adicionando página em branco (tamanho: {blank_page_size[0]}x{blank_page_size[1]} pontos)")
+                merger.append(blank_page)
+                
+            elif item.lower().endswith('.pdf'):
+                if os.path.exists(item):
+                    logging.info(f"Adicionando arquivo: {item}")
+                    reader = PdfReader(item)
+                    merger.append(reader)
+                    pdfs_added += 1
+                    
+                    if pdfs_added == sequence_info['total_pdfs']:
+                        logging.info("Todos os PDFs foram processados")
+        
+        # Salva o PDF final
+        with open(output_file, 'wb') as output:
+            merger.write(output)
+        
+        logging.info(f"PDFs unidos com sucesso em: {output_file}")
+        return True
+        
+    except Exception as e:
+        logging.error(f"Erro ao unir PDFs: {str(e)}")
+        return False
+
+
+
+def get_page_size(pdf_path):
+    """
+    Obtém o tamanho da primeira página de um PDF.
+    
+    Args:
+        pdf_path: Caminho do arquivo PDF
+    
+    Returns:
+        tuple: (width, height) em pontos ou None se não conseguir obter
+    """
+    try:
+        reader = PdfReader(pdf_path)
+        if len(reader.pages) > 0:
+            page = reader.pages[0]
+            return (float(page.mediabox.width), float(page.mediabox.height))
+    except Exception as e:
+        logging.warning(f"Erro ao obter tamanho da página de {pdf_path}: {e}")
+    return None
+
+def create_blank_page(size=(595, 842)):
+    """
+    Cria uma página em branco com o tamanho especificado.
+    
+    Args:
+        size: Tupla (width, height) em pontos
+    
+    Returns:
+        PdfReader contendo uma única página em branco
+    """
+    from reportlab.pdfgen import canvas
+    from io import BytesIO
+    
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=size)
+    c.showPage()
+    c.save()
+    
+    # Converte o buffer em um PdfReader
+    buffer.seek(0)
+    return PdfReader(buffer)
+
 def main():
     parser = argparse.ArgumentParser(description="Manipulação de arquivos PDF: juntar, remover texto, cortar margens, extrair páginas e converter para imagens.")
     
     parser.add_argument("-i", "--input", required=True, nargs='+',
-                       help="Arquivo(s) PDF de entrada. Pode ser:\n" +
-                            "- Um ou mais arquivos (ex: file1.pdf file2.pdf)\n" +
-                            "- Um padrão com wildcard (ex: *.pdf)\n" +
-                            "- Um diretório (ex: ./pdfs)")
+                       help="Arquivo(s) PDF de entrada. Use 'BLANK' para inserir páginas em branco quando usando --join")
     parser.add_argument("-o", "--output", 
                        help="Arquivo de saída para operações em arquivo único ou junção, ou diretório para múltiplos arquivos.")
     parser.add_argument("-m", "--margins", 
@@ -227,40 +362,50 @@ def main():
     args = parser.parse_args()
 
     try:
-        # Encontra todos os arquivos PDF baseado nos inputs
-        input_files = find_pdf_files(args.input)
-        
-        if not input_files:
-            logging.error("Nenhum arquivo PDF encontrado nos caminhos especificados")
-            return
-
-        logging.info(f"Encontrados {len(input_files)} arquivos PDF para processar:")
-        for file in input_files:
-            logging.info(f"- {file}")
-
-        # Se a opção de juntar PDFs foi selecionada
+        # Se for junção de PDFs
         if args.join:
-            if len(input_files) < 2:
-                logging.error("São necessários pelo menos 2 arquivos PDF para juntar")
-                return
-                
-            # Define o arquivo de saída para os PDFs unidos
-            if args.output:
-                output_file = args.output if args.output.lower().endswith('.pdf') else args.output + '.pdf'
-            else:
-                # Se não especificado, usa o primeiro arquivo como base para o nome
-                output_file = generate_output_filename(input_files[0], "merged")
+            # Verifica se tem BLANK na sequência
+            has_blank = any(item.upper() == "BLANK" for item in args.input)
             
-            # Junta os PDFs
-            if merge_pdfs(input_files, output_file):
-                logging.info("Operação de junção concluída com sucesso")
+            if has_blank:
+                # Usa merge_pdfs_with_blanks para sequência com BLANK
+                if args.output:
+                    output_file = args.output if args.output.lower().endswith('.pdf') else args.output + '.pdf'
+                else:
+                    # Encontra o primeiro PDF na sequência para usar como base do nome
+                    first_pdf = next((f for f in args.input if f.lower().endswith('.pdf')), None)
+                    if not first_pdf:
+                        logging.error("Nenhum arquivo PDF encontrado na sequência")
+                        return
+                    output_file = generate_output_filename(first_pdf, "merged")
+                
+                if merge_pdfs_with_blanks(args.input, output_file):
+                    logging.info("Operação de junção com páginas em branco concluída com sucesso")
+                else:
+                    logging.error("Falha na operação de junção com páginas em branco")
+                return
             else:
-                logging.error("Falha na operação de junção")
-            return
+                # Junção normal sem páginas em branco
+                input_files = find_pdf_files(args.input)
+                if len(input_files) < 2:
+                    logging.error("São necessários pelo menos 2 arquivos PDF para juntar")
+                    return
+                
+                if args.output:
+                    output_file = args.output if args.output.lower().endswith('.pdf') else args.output + '.pdf'
+                else:
+                    output_file = generate_output_filename(input_files[0], "merged")
+                
+                if merge_pdfs(input_files, output_file):
+                    logging.info("Operação de junção concluída com sucesso")
+                else:
+                    logging.error("Falha na operação de junção")
+                return
 
-        # Se não for junção, processa um único arquivo
-        if len(input_files) > 1:
-            logging.error("Múltiplos arquivos de entrada só são permitidos com a opção --join")
+        # Para operações em arquivo único
+        input_files = find_pdf_files([args.input[0]])  # Usa apenas o primeiro argumento
+        if not input_files:
+            logging.error("Nenhum arquivo PDF encontrado")
             return
             
         input_file = input_files[0]
@@ -279,11 +424,11 @@ def main():
             args.output = generate_output_filename(input_file, suffix_str)
             logging.info(f"Nome do arquivo de saída gerado automaticamente: {args.output}")
 
+        # Processa o arquivo
         page_range = None
         if args.pages:
             page_range = parse_page_range(args.pages)
 
-        # Resto do processamento para arquivo único
         temp_pdf = "temp_extracted.pdf"
         if page_range:
             extract_pages(input_file, temp_pdf, page_range)
