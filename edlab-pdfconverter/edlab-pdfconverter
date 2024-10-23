@@ -136,71 +136,181 @@ def generate_output_filename(input_path, suffix=""):
     if directory:
         return os.path.join(directory, new_name)
     return new_name
+def find_pdf_files(input_paths):
+    """
+    Encontra arquivos PDF baseado nos caminhos de entrada.
+    Suporta arquivo único, wildcards e diretórios.
+    
+    Args:
+        input_paths: Lista de caminhos ou padrões
+        
+    Returns:
+        Lista de caminhos de arquivos PDF encontrados
+    """
+    import glob
+    
+    pdf_files = []
+    
+    for input_path in input_paths:
+        if os.path.isdir(input_path):
+            # Se for um diretório, procura todos os PDFs nele
+            pdf_files.extend(sorted(glob.glob(os.path.join(input_path, "*.pdf"))))
+        elif '*' in input_path:
+            # Se contiver wildcard, usa glob diretamente
+            pdf_files.extend(sorted(glob.glob(input_path)))
+        elif os.path.isfile(input_path):
+            # Se for um arquivo único, adiciona se for PDF
+            if input_path.lower().endswith('.pdf'):
+                pdf_files.append(input_path)
+    
+    # Remove duplicatas mantendo a ordem
+    return list(dict.fromkeys(pdf_files))
+
+def merge_pdfs(input_files, output_file):
+    """
+    Junta múltiplos arquivos PDF em um único arquivo.
+    
+    Args:
+        input_files: Lista de caminhos dos arquivos PDF a serem unidos
+        output_file: Caminho do arquivo PDF de saída
+    """
+    merger = PdfWriter()
+    
+    try:
+        # Verifica se todos os arquivos existem e são PDFs
+        for pdf_file in input_files:
+            if not os.path.exists(pdf_file):
+                raise FileNotFoundError(f"Arquivo não encontrado: {pdf_file}")
+            if not pdf_file.lower().endswith('.pdf'):
+                raise ValueError(f"Arquivo não é um PDF: {pdf_file}")
+        
+        # Adiciona cada PDF ao merger
+        for pdf_file in input_files:
+            logging.info(f"Adicionando arquivo: {pdf_file}")
+            reader = PdfReader(pdf_file)
+            merger.append(reader)
+        
+        # Salva o PDF unificado
+        with open(output_file, 'wb') as output:
+            merger.write(output)
+        
+        logging.info(f"PDFs unidos com sucesso em: {output_file}")
+        return True
+        
+    except Exception as e:
+        logging.error(f"Erro ao unir PDFs: {str(e)}")
+        return False
 
 def main():
-    # Parser de argumentos
-    parser = argparse.ArgumentParser(description="Remove o texto de um PDF (opcional), corta margens, e/ou converte páginas específicas em imagens.")
+    parser = argparse.ArgumentParser(description="Manipulação de arquivos PDF: juntar, remover texto, cortar margens, extrair páginas e converter para imagens.")
     
-    # Argumentos de entrada e saída
-    parser.add_argument("-i", "--input", required=True, help="Caminho para o arquivo PDF de entrada.")
-    parser.add_argument("-o", "--output", help="Caminho para o arquivo PDF de saída. Se não especificado, será gerado automaticamente.")
-    parser.add_argument("-m", "--margins", help="Margens para o corte com pdfcrop. Use um valor ou quatro valores para margens separadas (esquerda, direita, cima, baixo).")
-    parser.add_argument("-d", "--dir", help="Diretório onde as imagens serão salvas.")
-    parser.add_argument("-p", "--pages", help="Intervalo de páginas para processar, por exemplo '1-3' ou '1'.")
-    parser.add_argument("-f", "--format", default="jpeg", help="Formato da imagem de saída (jpeg ou png). Padrão: jpeg.")
-    parser.add_argument("-rt", "--remove-text", action='store_true', help="Remove o texto do PDF antes de cortar margens e converter em imagens.")
+    parser.add_argument("-i", "--input", required=True, nargs='+',
+                       help="Arquivo(s) PDF de entrada. Pode ser:\n" +
+                            "- Um ou mais arquivos (ex: file1.pdf file2.pdf)\n" +
+                            "- Um padrão com wildcard (ex: *.pdf)\n" +
+                            "- Um diretório (ex: ./pdfs)")
+    parser.add_argument("-o", "--output", 
+                       help="Arquivo de saída para operações em arquivo único ou junção, ou diretório para múltiplos arquivos.")
+    parser.add_argument("-m", "--margins", 
+                       help="Margens para o corte com pdfcrop. Use um valor ou quatro valores para margens separadas.")
+    parser.add_argument("-d", "--dir", 
+                       help="Diretório onde as imagens serão salvas.")
+    parser.add_argument("-p", "--pages", 
+                       help="Intervalo de páginas para processar (ex: '1-3' ou '1').")
+    parser.add_argument("-f", "--format", default="jpeg",
+                       help="Formato da imagem de saída (jpeg ou png). Padrão: jpeg.")
+    parser.add_argument("-rt", "--remove-text", action='store_true',
+                       help="Remove o texto do PDF antes de cortar margens e converter em imagens.")
+    parser.add_argument("-j", "--join", action='store_true',
+                       help="Junta múltiplos PDFs em um único arquivo.")
 
-    # Parseia os argumentos
     args = parser.parse_args()
 
-    # Gera nome do arquivo de saída se não especificado
-    if not args.output:
-        suffix = []
+    try:
+        # Encontra todos os arquivos PDF baseado nos inputs
+        input_files = find_pdf_files(args.input)
+        
+        if not input_files:
+            logging.error("Nenhum arquivo PDF encontrado nos caminhos especificados")
+            return
+
+        logging.info(f"Encontrados {len(input_files)} arquivos PDF para processar:")
+        for file in input_files:
+            logging.info(f"- {file}")
+
+        # Se a opção de juntar PDFs foi selecionada
+        if args.join:
+            if len(input_files) < 2:
+                logging.error("São necessários pelo menos 2 arquivos PDF para juntar")
+                return
+                
+            # Define o arquivo de saída para os PDFs unidos
+            if args.output:
+                output_file = args.output if args.output.lower().endswith('.pdf') else args.output + '.pdf'
+            else:
+                # Se não especificado, usa o primeiro arquivo como base para o nome
+                output_file = generate_output_filename(input_files[0], "merged")
+            
+            # Junta os PDFs
+            if merge_pdfs(input_files, output_file):
+                logging.info("Operação de junção concluída com sucesso")
+            else:
+                logging.error("Falha na operação de junção")
+            return
+
+        # Se não for junção, processa um único arquivo
+        if len(input_files) > 1:
+            logging.error("Múltiplos arquivos de entrada só são permitidos com a opção --join")
+            return
+            
+        input_file = input_files[0]
+        
+        # Gera nome do arquivo de saída se não especificado
+        if not args.output:
+            suffix = []
+            if args.pages:
+                suffix.append(f"pages_{args.pages.replace('-', 'to')}")
+            if args.remove_text:
+                suffix.append("notext")
+            if args.margins:
+                suffix.append("cropped")
+            
+            suffix_str = "_".join(suffix) if suffix else ""
+            args.output = generate_output_filename(input_file, suffix_str)
+            logging.info(f"Nome do arquivo de saída gerado automaticamente: {args.output}")
+
+        page_range = None
         if args.pages:
-            suffix.append(f"pages_{args.pages.replace('-', 'to')}")
+            page_range = parse_page_range(args.pages)
+
+        # Resto do processamento para arquivo único
+        temp_pdf = "temp_extracted.pdf"
+        if page_range:
+            extract_pages(input_file, temp_pdf, page_range)
+            input_pdf = temp_pdf
+        else:
+            input_pdf = input_file
+
         if args.remove_text:
-            suffix.append("notext")
+            delete_text_from_pdf(input_pdf, args.output)
+        else:
+            copy_file(input_pdf, args.output)
+
         if args.margins:
-            suffix.append("cropped")
-        
-        suffix_str = "_".join(suffix) if suffix else ""
-        args.output = generate_output_filename(args.input, suffix_str)
-        logging.info(f"Nome do arquivo de saída gerado automaticamente: {args.output}")
+            cropped_output = args.output.replace(".pdf", "_cropped.pdf")
+            crop_pdf_with_pdfcrop(args.output, cropped_output, args.margins)
+            os.remove(args.output)
+            rename_file(cropped_output, args.output)
 
-    page_range = None
-    if args.pages:
-        page_range = parse_page_range(args.pages)
+        if page_range and os.path.exists(temp_pdf):
+            os.remove(temp_pdf)
 
-    # Extrai páginas específicas, se a opção -p estiver definida
-    temp_pdf = "temp_extracted.pdf"
-    if page_range:
-        extract_pages(args.input, temp_pdf, page_range)
-        input_pdf = temp_pdf
-    else:
-        input_pdf = args.input
+        if args.dir:
+            convert_pdf_to_images(args.output, args.dir, args.format.lower(), page_range)
 
-    # Remove o texto do PDF apenas se a opção -rt estiver definida
-    if args.remove_text:
-        delete_text_from_pdf(input_pdf, args.output)
-    else:
-        # Se não for remover o texto, apenas copia o PDF para o output
-        copy_file(input_pdf, args.output)
+    except Exception as e:
+        logging.error(f"Erro durante o processamento: {str(e)}")
+        raise
 
-    # Aplica o pdfcrop para cortar as margens do PDF final, apenas se a opção -m estiver definida
-    if args.margins:
-        cropped_output = args.output.replace(".pdf", "_cropped.pdf")
-        crop_pdf_with_pdfcrop(args.output, cropped_output, args.margins)
-        # Substitui o arquivo de saída pelo PDF cortado
-        os.remove(args.output)  # Remove o arquivo intermediário
-        rename_file(cropped_output, args.output)
-
-    # Limpa arquivo temporário se foi criado
-    if page_range and os.path.exists(temp_pdf):
-        os.remove(temp_pdf)
-
-    # Se o diretório de saída para as imagens for fornecido, converte o PDF (com ou sem corte) para imagens
-    if args.dir:
-        convert_pdf_to_images(args.output, args.dir, args.format.lower(), page_range)
-        
 if __name__ == "__main__":
     main()

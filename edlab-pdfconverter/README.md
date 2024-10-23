@@ -50,6 +50,26 @@ Isso irá converter apenas as páginas 1 a 3 do PDF para PNG no diretório img.
 ./edlab-pdfconverter -i input.pdf -o output.pdf -d img -p 1
 ```
 
+## Juntar PDFs específicos
+```
+./edlab-pdfconverter -i arquivo1.pdf arquivo2.pdf arquivo3.pdf -j
+```
+
+## Juntar todos os PDFs do diretório atual
+```
+./edlab-pdfconverter -i *.pdf -j
+```
+
+## Juntar PDFs de um diretório específico
+```
+./edlab-pdfconverter -i ./pdfs -j
+```
+
+## Juntar PDFs com nome de saída específico
+```
+./edlab-pdfconverter -i *.pdf -j -o resultado.pdf
+```
+
 Isso converterá apenas a página 1 do PDF em PNG.
 
 # Opções
