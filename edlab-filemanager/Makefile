@@ -8,6 +8,7 @@ examples:
 	touch file-4.txt
 	touch file-145.txt
 	touch file-10.txt
+	touch abacaxi-10.txt
 
 clean:
 	rm *.txt
