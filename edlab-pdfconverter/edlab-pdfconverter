@@ -105,6 +105,15 @@ def rename_file(old_name, new_name):
     except OSError as e:
         logging.error(f"Erro ao renomear arquivo: {e}")
 
+def copy_file(source, destination):
+    """Copia um arquivo mantendo o original."""
+    try:
+        import shutil
+        shutil.copy2(source, destination)
+        logging.info(f"Arquivo copiado de {source} para {destination}")
+    except OSError as e:
+        logging.error(f"Erro ao copiar arquivo: {e}")
+
 def main():
     # Parser de argumentos
     parser = argparse.ArgumentParser(description="Remove o texto de um PDF (opcional), corta margens, e/ou converte páginas específicas em imagens.")
@@ -138,18 +147,23 @@ def main():
         delete_text_from_pdf(input_pdf, args.output)
     else:
         # Se não for remover o texto, apenas copia o PDF para o output
-        rename_file(input_pdf, args.output)
+        copy_file(input_pdf, args.output)
 
     # Aplica o pdfcrop para cortar as margens do PDF final, apenas se a opção -m estiver definida
     if args.margins:
         cropped_output = args.output.replace(".pdf", "_cropped.pdf")
         crop_pdf_with_pdfcrop(args.output, cropped_output, args.margins)
-        # Renomeia o PDF cortado de volta para output.pdf
+        # Substitui o arquivo de saída pelo PDF cortado
+        os.remove(args.output)  # Remove o arquivo intermediário
         rename_file(cropped_output, args.output)
+
+    # Limpa arquivo temporário se foi criado
+    if page_range and os.path.exists(temp_pdf):
+        os.remove(temp_pdf)
 
     # Se o diretório de saída para as imagens for fornecido, converte o PDF (com ou sem corte) para imagens
     if args.dir:
         convert_pdf_to_images(args.output, args.dir, args.format.lower(), page_range)
-
+    
 if __name__ == "__main__":
     main()
