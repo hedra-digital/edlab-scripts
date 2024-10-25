@@ -126,7 +126,7 @@ def generate_output_filename(input_path, suffix=""):
         input_path: Caminho do arquivo de entrada
         suffix: Sufixo a ser adicionado antes da extensão
     """
-    directory = os.path.dirname(input_path)
+    directory = os.path.dirname(os.path.abspath(input_path))
     filename = os.path.basename(input_path)
     name, ext = os.path.splitext(filename)
     
@@ -135,11 +135,8 @@ def generate_output_filename(input_path, suffix=""):
     else:
         new_name = f"{name}_modified{ext}"
     
-    # Se o diretório estiver vazio, usa o diretório atual
-    if directory:
-        return os.path.join(directory, new_name)
-    return new_name
-
+    return os.path.join(directory, new_name)
+    
 def find_pdf_files(input_paths):
     """
     Encontra arquivos PDF baseado nos caminhos de entrada.
@@ -151,9 +148,39 @@ def find_pdf_files(input_paths):
     Returns:
         Lista de caminhos de arquivos PDF encontrados
     """
+
     import glob
     
     pdf_files = []
+    # Obtém o diretório de trabalho atual
+    current_dir = os.getcwd()
+    
+    for input_path in input_paths:
+        if isinstance(input_path, str) and input_path.upper() == "BLANK":
+            pdf_files.append("BLANK")
+            continue
+            
+        # Converte para caminho absoluto se for caminho relativo
+        abs_path = os.path.abspath(os.path.join(current_dir, input_path))
+            
+        if os.path.isdir(abs_path):
+            # Se for um diretório, procura todos os PDFs nele
+            pdf_files.extend(sorted(glob.glob(os.path.join(abs_path, "*.pdf"))))
+        elif '*' in input_path:
+            # Para wildcards, primeiro converte o diretório base para absoluto
+            base_dir = os.path.dirname(abs_path)
+            pattern = os.path.basename(input_path)
+            full_pattern = os.path.join(base_dir, pattern)
+            pdf_files.extend(sorted(glob.glob(full_pattern)))
+        elif os.path.isfile(abs_path):
+            # Se for um arquivo único, adiciona se for PDF
+            if abs_path.lower().endswith('.pdf'):
+                pdf_files.append(abs_path)
+        else:
+            logging.warning(f"Caminho inválido ou arquivo não encontrado: {input_path}")
+    
+    # Remove duplicatas mantendo a ordem
+    return list(dict.fromkeys(pdf_files))
     
     for input_path in input_paths:
         if os.path.isdir(input_path):
@@ -422,7 +449,11 @@ def save_page_count_report(results, output_file="PAGES.txt"):
         output_file: Nome do arquivo de saída
     """
     try:
-        with open(output_file, 'w', encoding='utf-8') as f:
+        # Converte o nome do arquivo de saída para caminho absoluto
+        current_dir = os.getcwd()
+        output_path = os.path.abspath(os.path.join(current_dir, output_file))
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
             # Cabeçalho com espaçamento fixo
             f.write(f"{'Nome do arquivo':<40} {'Páginas':>8}\n")
             f.write("-" * 50 + "\n")
@@ -432,7 +463,7 @@ def save_page_count_report(results, output_file="PAGES.txt"):
                 filename = os.path.basename(file_info['file'])  # Pega só o nome do arquivo, sem o caminho
                 f.write(f"{filename:<40} {file_info['pages']:>8}\n")
             
-        logging.info(f"Relatório de contagem salvo em: {output_file}")
+        logging.info(f"Relatório de contagem salvo em: {output_path}")
     except Exception as e:
         logging.error(f"Erro ao salvar relatório: {str(e)}")
         raise
