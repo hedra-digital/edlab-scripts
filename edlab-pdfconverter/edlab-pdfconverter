@@ -6,9 +6,11 @@ import os
 import logging
 from PyPDF2 import PdfReader, PdfWriter
 from pdf2image import convert_from_path
+from datetime import datetime
 
 # Configuração do logging para depuração
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 
 def delete_text_from_pdf(input_pdf, output_pdf):
@@ -338,12 +340,108 @@ def create_blank_page(size=(595, 842)):
     # Converte o buffer em um PdfReader
     buffer.seek(0)
     return PdfReader(buffer)
+def find_pdf_files(input_paths):
+    """
+    Encontra arquivos PDF baseado nos caminhos de entrada.
+    Suporta arquivo único, wildcards e diretórios.
+    
+    Args:
+        input_paths: Lista de caminhos ou padrões
+        
+    Returns:
+        Lista de caminhos de arquivos PDF encontrados
+    """
+    import glob
+    
+    pdf_files = []
+    
+    for input_path in input_paths:
+        if isinstance(input_path, str) and input_path.upper() == "BLANK":
+            pdf_files.append("BLANK")
+            continue
+            
+        if os.path.isdir(input_path):
+            # Se for um diretório, procura todos os PDFs nele
+            pdf_files.extend(sorted(glob.glob(os.path.join(input_path, "*.pdf"))))
+        elif '*' in input_path:
+            # Se contiver wildcard, usa glob diretamente
+            pdf_files.extend(sorted(glob.glob(input_path)))
+        elif os.path.isfile(input_path):
+            # Se for um arquivo único, adiciona se for PDF
+            if input_path.lower().endswith('.pdf'):
+                pdf_files.append(input_path)
+        else:
+            logging.warning(f"Caminho inválido ou arquivo não encontrado: {input_path}")
+    
+    # Remove duplicatas mantendo a ordem
+    return list(dict.fromkeys(pdf_files))
+
+def count_pdf_pages(pdf_files):
+    """
+    Conta o número de páginas em cada arquivo PDF.
+    
+    Args:
+        pdf_files: Lista de caminhos de arquivos PDF
+        
+    Returns:
+        dict: Dicionário com informações sobre contagem de páginas
+    """
+    results = {
+        'files': [],
+        'total_pages': 0,
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'error_files': []
+    }
+    
+    for pdf_file in pdf_files:
+        try:
+            reader = PdfReader(pdf_file)
+            num_pages = len(reader.pages)
+            results['files'].append({
+                'file': pdf_file,
+                'pages': num_pages,
+                'size': os.path.getsize(pdf_file) / (1024 * 1024)  # Tamanho em MB
+            })
+            results['total_pages'] += num_pages
+            logging.info(f"Contadas {num_pages} páginas em: {pdf_file}")
+        except Exception as e:
+            logging.error(f"Erro ao processar {pdf_file}: {str(e)}")
+            results['error_files'].append({
+                'file': pdf_file,
+                'error': str(e)
+            })
+    
+    return results
+
+def save_page_count_report(results, output_file="PAGES.txt"):
+    """
+    Salva o relatório simplificado de contagem de páginas em um arquivo texto.
+    
+    Args:
+        results: Dicionário com resultados da contagem
+        output_file: Nome do arquivo de saída
+    """
+    try:
+        with open(output_file, 'w', encoding='utf-8') as f:
+            # Cabeçalho com espaçamento fixo
+            f.write(f"{'Nome do arquivo':<40} {'Páginas':>8}\n")
+            f.write("-" * 50 + "\n")
+            
+            # Lista de arquivos e páginas
+            for file_info in results['files']:
+                filename = os.path.basename(file_info['file'])  # Pega só o nome do arquivo, sem o caminho
+                f.write(f"{filename:<40} {file_info['pages']:>8}\n")
+            
+        logging.info(f"Relatório de contagem salvo em: {output_file}")
+    except Exception as e:
+        logging.error(f"Erro ao salvar relatório: {str(e)}")
+        raise
 
 def main():
     parser = argparse.ArgumentParser(description="Manipulação de arquivos PDF: juntar, remover texto, cortar margens, extrair páginas e converter para imagens.")
     
     parser.add_argument("-i", "--input", required=True, nargs='+',
-                       help="Arquivo(s) PDF de entrada. Use 'BLANK' para inserir páginas em branco quando usando --join")
+                       help="Arquivo(s) PDF de entrada, diretório(s) ou padrões (*.pdf). Use 'BLANK' para inserir páginas em branco quando usando --join")
     parser.add_argument("-o", "--output", 
                        help="Arquivo de saída para operações em arquivo único ou junção, ou diretório para múltiplos arquivos.")
     parser.add_argument("-m", "--margins", 
@@ -358,58 +456,77 @@ def main():
                        help="Remove o texto do PDF antes de cortar margens e converter em imagens.")
     parser.add_argument("-j", "--join", action='store_true',
                        help="Junta múltiplos PDFs em um único arquivo.")
+    parser.add_argument("--page-counter", action='store_true',
+                       help="Conta o número de páginas dos PDFs e gera relatório em PAGES.txt")
 
     args = parser.parse_args()
 
     try:
+        # Encontra todos os arquivos PDF com base nos argumentos de entrada
+        input_files = find_pdf_files(args.input)
+        
+        if not input_files:
+            logging.error("Nenhum arquivo PDF encontrado")
+            return
+
+        # Se a opção --page-counter foi especificada
+        if args.page_counter:
+            # Filtra apenas os arquivos PDF (remove BLANK se houver)
+            pdf_files = [f for f in input_files if f != "BLANK"]
+            if not pdf_files:
+                logging.error("Nenhum arquivo PDF válido encontrado para contagem")
+                return
+                
+            results = count_pdf_pages(pdf_files)
+            save_page_count_report(results)
+            return
+            
         # Se for junção de PDFs
         if args.join:
             # Verifica se tem BLANK na sequência
-            has_blank = any(item.upper() == "BLANK" for item in args.input)
+            has_blank = any(item == "BLANK" for item in input_files)
             
             if has_blank:
-                # Usa merge_pdfs_with_blanks para sequência com BLANK
                 if args.output:
                     output_file = args.output if args.output.lower().endswith('.pdf') else args.output + '.pdf'
                 else:
                     # Encontra o primeiro PDF na sequência para usar como base do nome
-                    first_pdf = next((f for f in args.input if f.lower().endswith('.pdf')), None)
+                    first_pdf = next((f for f in input_files if f != "BLANK"), None)
                     if not first_pdf:
                         logging.error("Nenhum arquivo PDF encontrado na sequência")
                         return
                     output_file = generate_output_filename(first_pdf, "merged")
                 
-                if merge_pdfs_with_blanks(args.input, output_file):
+                if merge_pdfs_with_blanks(input_files, output_file):
                     logging.info("Operação de junção com páginas em branco concluída com sucesso")
                 else:
                     logging.error("Falha na operação de junção com páginas em branco")
                 return
             else:
-                # Junção normal sem páginas em branco
-                input_files = find_pdf_files(args.input)
-                if len(input_files) < 2:
+                # Remove quaisquer "BLANK" da lista para junção normal
+                pdf_files = [f for f in input_files if f != "BLANK"]
+                if len(pdf_files) < 2:
                     logging.error("São necessários pelo menos 2 arquivos PDF para juntar")
                     return
                 
                 if args.output:
                     output_file = args.output if args.output.lower().endswith('.pdf') else args.output + '.pdf'
                 else:
-                    output_file = generate_output_filename(input_files[0], "merged")
+                    output_file = generate_output_filename(pdf_files[0], "merged")
                 
-                if merge_pdfs(input_files, output_file):
+                if merge_pdfs(pdf_files, output_file):
                     logging.info("Operação de junção concluída com sucesso")
                 else:
                     logging.error("Falha na operação de junção")
                 return
 
         # Para operações em arquivo único
-        input_files = find_pdf_files([args.input[0]])  # Usa apenas o primeiro argumento
-        if not input_files:
-            logging.error("Nenhum arquivo PDF encontrado")
+        # Usa apenas o primeiro arquivo PDF encontrado
+        input_file = next((f for f in input_files if f != "BLANK"), None)
+        if not input_file:
+            logging.error("Nenhum arquivo PDF válido encontrado para processamento")
             return
             
-        input_file = input_files[0]
-        
         # Gera nome do arquivo de saída se não especificado
         if not args.output:
             suffix = []
