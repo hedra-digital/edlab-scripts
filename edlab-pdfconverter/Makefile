@@ -9,6 +9,7 @@ test:
 	./edlab-pdfconverter -i *.pdf --page-counter
 
 clean:
+	-rm output.pdf
 	-rm output_images -rf
 	-rm output[1-3].pdf
 	-rm img -rf
