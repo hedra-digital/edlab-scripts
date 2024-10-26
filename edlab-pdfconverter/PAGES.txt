@@ -1,5 +1,0 @@
-Nome do arquivo                           Páginas
---------------------------------------------------
-input.pdf                                      32
-output1.pdf                                     3
-output.pdf                                     65

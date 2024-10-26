@@ -442,7 +442,8 @@ def count_pdf_pages(pdf_files):
 
 def save_page_count_report(results, output_file="PAGES.txt"):
     """
-    Salva o relatório simplificado de contagem de páginas em um arquivo texto.
+    Salva o relatório simplificado de contagem de páginas em um arquivo texto,
+    usando tab como separador entre colunas.
     
     Args:
         results: Dicionário com resultados da contagem
@@ -454,20 +455,19 @@ def save_page_count_report(results, output_file="PAGES.txt"):
         output_path = os.path.abspath(os.path.join(current_dir, output_file))
         
         with open(output_path, 'w', encoding='utf-8') as f:
-            # Cabeçalho com espaçamento fixo
-            f.write(f"{'Nome do arquivo':<40} {'Páginas':>8}\n")
-            f.write("-" * 50 + "\n")
+            # Cabeçalho com tab
+            f.write(f"Nome do arquivo\tPáginas\n")
             
             # Lista de arquivos e páginas
             for file_info in results['files']:
                 filename = os.path.basename(file_info['file'])  # Pega só o nome do arquivo, sem o caminho
-                f.write(f"{filename:<40} {file_info['pages']:>8}\n")
+                f.write(f"{filename}\t{file_info['pages']}\n")
             
         logging.info(f"Relatório de contagem salvo em: {output_path}")
     except Exception as e:
         logging.error(f"Erro ao salvar relatório: {str(e)}")
         raise
-
+        
 def main():
     parser = argparse.ArgumentParser(description="Manipulação de arquivos PDF: juntar, remover texto, cortar margens, extrair páginas e converter para imagens.")
     

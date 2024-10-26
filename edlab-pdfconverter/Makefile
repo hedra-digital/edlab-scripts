@@ -5,6 +5,8 @@ test:
 	./edlab-pdfconverter -i input.pdf -o output1.pdf -p 1-3 -rt -d img -m '10 10 10 10'
 	echo "=== TESTE 2: Juntar pdfs ========================================================"
 	./edlab-pdfconverter -i input.pdf BLANK input.pdf -j  -o output.pdf
+	echo "=== TESTE 3: Juntar pdfs ========================================================"
+	./edlab-pdfconverter -i *.pdf --page-counter
 
 clean:
 	-rm output_images -rf
@@ -14,3 +16,4 @@ clean:
 	-rm img2 -rf
 	-rm img3 -rf
 	-rm *pages* *merge*
+	-rm PAGES.txt
