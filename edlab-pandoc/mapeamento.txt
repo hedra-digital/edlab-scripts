@@ -1,0 +1,2 @@
+<Box>    \begin{box}
+</Box>   \end{box}
