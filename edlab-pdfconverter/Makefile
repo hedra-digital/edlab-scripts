@@ -7,6 +7,8 @@ test:
 	./edlab-pdfconverter -i input.pdf BLANK output1.pdf -j 
 	echo "=== TESTE 3: Juntar pdfs ========================================================"
 	./edlab-pdfconverter -i *.pdf --page-counter
+	echo "=== TESTE 4: Extrair texto de pdfs ========================================================"
+	./edlab-pdfconverter -i inputB.pdf --extract-text
 
 clean:
 	-rm output.pdf
@@ -16,5 +18,5 @@ clean:
 	-rm img1 -rf
 	-rm img2 -rf
 	-rm img3 -rf
-	-rm *pages* *merge*
-	-rm PAGES.txt
+	-rm PAGES.txt 
+	-rm *pages* *merge* *extracted_text.txt

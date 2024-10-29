@@ -1,16 +1,16 @@
+# Versão 1.4 
+
 # Histórico
 No PNLD2026, precisamos criar imagens a partir dos PDFs para para o HTML. Essas imagens precisavam ser cropadas e sem o texto do livro. 
 
 # Dependências
 ```
 sudo pacman -S ghostscript poppler  # Para Ghostscript e pdf2image
-
 sudo pacman -S yay
 yay -S python-pdf2image python-pillow  # Usando yay para instalar pdf2image e Pillow do AUR
 yay -S python-pypdf2
-
 sudo pacman -S texlive-core # para o pdfcrop
-
+sudo pacman -S python-pdfminer
 ```
 
 ## Instalação no Ubuntu
@@ -18,10 +18,17 @@ sudo pacman -S texlive-core # para o pdfcrop
 ```
 sudo apt update
 
-pip3 install --break-system-packages pdf2image Pillow PyPDF2
+pip3 install --break-system-packages pdf2image Pillow PyPDF2  # precisa atualizar @paulo
 ```
 
 # Descrição
+
+
+## Extrair páginas
+
+```
+./edlab-pdfconverter -i input.pdf -o output.pdf -p 1-6
+```
 
 
 ## Remover o texto do PDF e dar um crop no pdf final
@@ -73,8 +80,15 @@ Isso irá converter apenas as páginas 1 a 3 do PDF para PNG no diretório img.
 ## Juntar PDFs específicos e colocar uma página ou mais páginas em branco (BLANK)
 
 ```
-./edlab-pdfconverter -i input1.pdf BLANK input2.pdf -j-o output.pdf
+./edlab-pdfconverter -i input1.pdf BLANK input2.pdf -j -o output.pdf
 ```
+
+## Para extrair textos `--extract-text -et`
+
+```
+./edlab-pdfconverter -i inputB.pdf -o output.pdf -et
+``` 
+
 
 Isso converterá apenas a página 1 do PDF em PNG.
 
@@ -90,10 +104,12 @@ Isso converterá apenas a página 1 do PDF em PNG.
                         Margens para o corte com pdfcrop. Use um valor ou quatro valores para margens separadas (esquerda, direita, cima, baixo).
   -d DIR, --dir DIR     Diretório onde as imagens serão salvas.
   -p PAGES, --pages PAGES
-                        Intervalo de páginas para processar, por exemplo '1-3' ou '1'.
+                        Intervalo de páginas para extrair ou processar, por exemplo '1-3' ou '1'.
   -f FORMAT, --format FORMAT
                         Formato da imagem de saída (jpeg ou png). Padrão: jpeg.
   -rt, --remove-text    Remove o texto do PDF antes de cortar margens e converter em imagens.
+  --page-counter        Conta o número de páginas dos PDFs e gera relatório em PAGES.txt
+  -et, --extract-text   Extrai texto do PDF removendo hifenizações
 ```
 
 

@@ -7,6 +7,10 @@ import logging
 from PyPDF2 import PdfReader, PdfWriter
 from pdf2image import convert_from_path
 from datetime import datetime
+from io import StringIO
+from pdfminer.high_level import extract_text_to_fp
+from pdfminer.layout import LAParams
+import re
 
 # Configuração do logging para depuração
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -468,6 +472,110 @@ def save_page_count_report(results, output_file="PAGES.txt"):
         logging.error(f"Erro ao salvar relatório: {str(e)}")
         raise
         
+def remove_hyphenation(text):
+    """
+    Remove hifenizações do texto mantendo quebras de linha legítimas.
+    
+    Args:
+        text: Texto extraído do PDF
+        
+    Returns:
+        str: Texto sem hifenizações
+    """
+    # Padrão para encontrar palavras hifenizadas no final da linha
+    pattern = r'(\w+)-\n(\w+)'
+    
+    # Função para processar cada match e decidir se deve juntar as palavras
+    def process_hyphen(match):
+        part1, part2 = match.groups()
+        combined = part1 + part2
+        
+        # Verifica se a palavra combinada existe (implementação simplificada)
+        # Você pode adicionar um dicionário mais completo ou outras regras aqui
+        if len(combined) >= 4:  # Heurística simples: palavras maiores que 4 letras
+            return combined + '\n'
+        else:
+            return f"{part1}-\n{part2}"  # Mantém a hifenização original
+    
+    # Aplica a remoção de hifenização
+    dehyphenated = re.sub(pattern, process_hyphen, text)
+    
+    return dehyphenated
+
+def extract_text_from_pdf(input_pdf, output_file=None):
+    """
+    Extrai texto de um PDF e remove hifenizações.
+    
+    Args:
+        input_pdf: Caminho do arquivo PDF de entrada
+        output_file: Caminho do arquivo de saída (opcional)
+    
+    Returns:
+        str: Caminho do arquivo de saída
+    """
+    try:
+        # Configura parâmetros de extração
+        laparams = LAParams(
+            line_overlap=0.5,
+            char_margin=2.0,
+            line_margin=0.5,
+            word_margin=0.1,
+            boxes_flow=0.5,
+            detect_vertical=False,
+            all_texts=True
+        )
+        
+        # Extrai o texto para um buffer
+        output_buffer = StringIO()
+        with open(input_pdf, 'rb') as fin:
+            extract_text_to_fp(fin, output_buffer, laparams=laparams)
+        
+        # Obtém o texto e remove hifenizações
+        text = output_buffer.getvalue()
+        dehyphenated_text = remove_hyphenation(text)
+        
+        # Gera nome do arquivo de saída se não especificado
+        if output_file is None:
+            output_file = generate_output_filename(input_pdf, "extracted_text", ".txt")
+        
+        # Salva o texto processado
+        with open(output_file, 'w', encoding='utf-8') as fout:
+            fout.write(dehyphenated_text)
+        
+        logging.info(f"Texto extraído e processado salvo em: {output_file}")
+        return output_file
+        
+    except Exception as e:
+        logging.error(f"Erro ao extrair texto do PDF: {str(e)}")
+        raise
+
+# Modifique a função generate_output_filename para aceitar extensão personalizada:
+
+def generate_output_filename(input_path, suffix="", ext=None):
+    """
+    Gera um nome de arquivo de saída baseado no arquivo de entrada.
+    
+    Args:
+        input_path: Caminho do arquivo de entrada
+        suffix: Sufixo a ser adicionado antes da extensão
+        ext: Extensão personalizada (opcional)
+    """
+    directory = os.path.dirname(os.path.abspath(input_path))
+    filename = os.path.basename(input_path)
+    name, original_ext = os.path.splitext(filename)
+    
+    # Use a extensão fornecida ou mantenha a original
+    final_ext = ext if ext is not None else original_ext
+    
+    if suffix:
+        new_name = f"{name}_{suffix}{final_ext}"
+    else:
+        new_name = f"{name}_modified{final_ext}"
+    
+    return os.path.join(directory, new_name)
+
+# Modifique a função main para incluir a nova opção:
+
 def main():
     parser = argparse.ArgumentParser(description="Manipulação de arquivos PDF: juntar, remover texto, cortar margens, extrair páginas e converter para imagens.")
     
@@ -489,12 +597,30 @@ def main():
                        help="Junta múltiplos PDFs em um único arquivo.")
     parser.add_argument("--page-counter", action='store_true',
                        help="Conta o número de páginas dos PDFs e gera relatório em PAGES.txt")
+    parser.add_argument("-et", "--extract-text", action='store_true',
+                       help="Extrai texto do PDF removendo hifenizações")
 
     args = parser.parse_args()
 
     try:
         # Encontra todos os arquivos PDF com base nos argumentos de entrada
         input_files = find_pdf_files(args.input)
+        
+        if not input_files:
+            logging.error("Nenhum arquivo PDF encontrado")
+            return
+
+        # Se a opção --extract-text foi especificada
+        if args.extract_text:
+            # Processa cada arquivo PDF encontrado
+            for input_file in [f for f in input_files if f != "BLANK"]:
+                output_file = args.output if args.output else None
+                try:
+                    extracted_file = extract_text_from_pdf(input_file, output_file)
+                    logging.info(f"Texto extraído com sucesso de {input_file} para {extracted_file}")
+                except Exception as e:
+                    logging.error(f"Erro ao processar {input_file}: {str(e)}")
+            return
         
         if not input_files:
             logging.error("Nenhum arquivo PDF encontrado")
