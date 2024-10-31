@@ -503,12 +503,93 @@ def remove_hyphenation(text):
 def extract_text_with_italics(input_pdf, output_file=None):
     """Extrai texto de um PDF mantendo a formatação de itálicos em Markdown."""
     try:
-        from pdfminer.high_level import extract_text_to_fp, extract_pages
+        from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
+        from pdfminer.converter import PDFLayoutAnalyzer
+        from pdfminer.pdfpage import PDFPage
         from pdfminer.layout import LAParams, LTTextBox, LTTextLine, LTChar
         
-        logging.debug(f"Iniciando extração de texto do arquivo: {input_pdf}")
+        class ItalicsFinder(PDFLayoutAnalyzer):
+            def __init__(self, rsrcmgr, laparams=None):
+                super().__init__(rsrcmgr, laparams=laparams)
+                self.text_content = []
+                self.word_buffer = []
+                self.in_italic = False
+                self.fonts_seen = set()
+                
+            def is_italic_font(self, font_name):
+                """Verifica se uma fonte é itálica baseado em padrões comuns de nomenclatura."""
+                if not font_name:
+                    return False
+                    
+                font_name = font_name.lower()
+                self.fonts_seen.add(font_name)
+                
+                # Sufixos comuns para fontes itálicas
+                italic_suffixes = ['-it', 'it', 'italic', 'oblique', 'slant', 'inclined']
+                
+                # Padrões comuns em nomes de fonte
+                base_name = font_name.split('+')[-1]  # Remove prefixos como 'BVTFIJ+'
+                
+                # Verifica sufixos conhecidos
+                return any(suffix in base_name for suffix in italic_suffixes)
+                
+            def flush_word(self):
+                """Adiciona a palavra atual ao conteúdo."""
+                if self.word_buffer:
+                    word = ''.join(self.word_buffer)
+                    if self.in_italic:
+                        self.text_content.append(f"*{word}*")
+                    else:
+                        self.text_content.append(word)
+                    self.word_buffer = []
+            
+            def receive_layout(self, ltpage):
+                def process_char(char):
+                    if isinstance(char, LTChar):
+                        font_name = getattr(char, 'fontname', '')
+                        char_text = char.get_text()
+                        
+                        # Se temos uma fonte, verifica se é itálica
+                        if font_name:
+                            is_italic = self.is_italic_font(font_name)
+                            
+                            # Se mudou o estado do itálico
+                            if is_italic != self.in_italic:
+                                self.flush_word()
+                                self.in_italic = is_italic
+                        
+                        # Adiciona o caractere ao buffer atual
+                        self.word_buffer.append(char_text)
+                        
+                        # Se for espaço ou quebra de linha, finaliza a palavra
+                        if char_text.isspace():
+                            self.flush_word()
+                            self.text_content.append(char_text)
+                
+                def render(item):
+                    if isinstance(item, LTTextBox):
+                        for line in item:
+                            if isinstance(line, LTTextLine):
+                                for char in line:
+                                    process_char(char)
+                                # Final da linha
+                                self.flush_word()
+                                self.text_content.append('\n')
+                
+                for child in ltpage:
+                    render(child)
+                
+                # Garante que a última palavra seja processada
+                self.flush_word()
+            
+            def get_result(self):
+                return ''.join(self.text_content)
+            
+            def get_fonts(self):
+                return self.fonts_seen
         
-        # Primeiro passo: extrair todo o texto usando o método que já funciona
+        # Configuração
+        rsrcmgr = PDFResourceManager()
         laparams = LAParams(
             line_overlap=0.5,
             char_margin=2.0,
@@ -519,58 +600,28 @@ def extract_text_with_italics(input_pdf, output_file=None):
             all_texts=True
         )
         
-        # Extrai o texto base
-        output_buffer = StringIO()
-        with open(input_pdf, 'rb') as fin:
-            extract_text_to_fp(fin, output_buffer, laparams=laparams)
+        device = ItalicsFinder(rsrcmgr, laparams=laparams)
+        interpreter = PDFPageInterpreter(rsrcmgr, device)
         
-        text = output_buffer.getvalue()
-        logging.debug(f"Texto base extraído: {len(text)} caracteres")
+        logging.debug(f"Iniciando extração de texto com itálicos de: {input_pdf}")
+        
+        # Processa cada página
+        with open(input_pdf, 'rb') as fp:
+            for page in PDFPage.get_pages(fp):
+                interpreter.process_page(page)
+                logging.debug("Página processada")
+        
+        # Obtém o texto processado
+        text = device.get_result()
+        fonts = device.get_fonts()
+        
+        logging.debug(f"Fontes encontradas no documento: {fonts}")
         
         if not text.strip():
             logging.warning("Nenhum texto extraído do PDF!")
             text = "Nenhum texto encontrado no PDF."
         else:
-            # Agora vamos identificar as posições dos itálicos
-            italic_positions = []
-            
-            # Segundo passo: identificar as posições dos textos em itálico
-            for page_layout in extract_pages(input_pdf, laparams=laparams):
-                for element in page_layout:
-                    if isinstance(element, LTTextBox):
-                        for line in element:
-                            if isinstance(line, LTTextLine):
-                                current_position = 0
-                                for char in line:
-                                    if isinstance(char, LTChar):
-                                        char_text = char.get_text()
-                                        if hasattr(char, 'fontname'):
-                                            font_name = char.fontname.lower()
-                                            logging.debug(f"Fonte encontrada: {font_name} para '{char_text}'")
-                                            
-                                            # Procura pelo texto exato no texto base
-                                            start_pos = text.find(char_text)
-                                            if start_pos >= 0:
-                                                # Verifica se é itálico
-                                                is_italic = any(marker in font_name for marker in [
-                                                    'italic', 'oblique', '-it', '_i', 'it-', '/it',
-                                                    'italicmt', 'italictype', 'slanted', 'inclined'
-                                                ])
-                                                
-                                                if is_italic:
-                                                    italic_positions.append((start_pos, start_pos + len(char_text)))
-            
-            logging.debug(f"Posições de itálico encontradas: {italic_positions}")
-            
-            # Terceiro passo: aplicar os marcadores de itálico
-            if italic_positions:
-                # Ordena as posições
-                italic_positions.sort(reverse=True)  # Processa de trás para frente
-                
-                # Aplica os marcadores
-                for start, end in italic_positions:
-                    text = text[:start] + '*' + text[start:end] + '*' + text[end:]
-            
+            logging.info(f"Extraído {len(text)} caracteres do PDF")
             # Remove hifenização
             text = remove_hyphenation(text)
         
