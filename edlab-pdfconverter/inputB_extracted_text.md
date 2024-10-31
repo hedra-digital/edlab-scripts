@@ -1,1 +1,0 @@
-Nenhum texto encontrado no PDF.
