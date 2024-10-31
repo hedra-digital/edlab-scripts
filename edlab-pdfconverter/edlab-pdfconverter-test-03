@@ -501,26 +501,14 @@ def remove_hyphenation(text):
     return dehyphenated
 
 def extract_text_with_italics(input_pdf, output_file=None):
-    """
-    Extrai texto de um PDF mantendo a formatação de itálicos em Markdown.
-    
-    Args:
-        input_pdf: Caminho do arquivo PDF de entrada
-        output_file: Caminho do arquivo de saída (opcional)
-    
-    Returns:
-        str: Caminho do arquivo de saída
-    """
+    """Extrai texto de um PDF mantendo a formatação de itálicos em Markdown."""
     try:
-        from pdfminer.high_level import extract_text_to_fp
+        from pdfminer.high_level import extract_text_to_fp, extract_pages
         from pdfminer.layout import LAParams, LTTextBox, LTTextLine, LTChar
-        from pdfminer.converter import PDFLayoutAnalyzer
-        from pdfminer.pdfinterp import PDFPageInterpreter
-        from pdfminer.pdfpage import PDFPage
         
         logging.debug(f"Iniciando extração de texto do arquivo: {input_pdf}")
         
-        # Configura parâmetros de extração
+        # Primeiro passo: extrair todo o texto usando o método que já funciona
         laparams = LAParams(
             line_overlap=0.5,
             char_margin=2.0,
@@ -531,78 +519,57 @@ def extract_text_with_italics(input_pdf, output_file=None):
             all_texts=True
         )
         
-        # Buffer para o texto
+        # Extrai o texto base
         output_buffer = StringIO()
-        
-        # Extrai o texto para o buffer usando high_level API
         with open(input_pdf, 'rb') as fin:
             extract_text_to_fp(fin, output_buffer, laparams=laparams)
         
-        # Obtém o texto extraído
         text = output_buffer.getvalue()
-        
-        logging.debug(f"Texto extraído bruto (primeiros 200 chars): {text[:200]}")
+        logging.debug(f"Texto base extraído: {len(text)} caracteres")
         
         if not text.strip():
-            logging.warning("Nenhum texto foi extraído do PDF!")
+            logging.warning("Nenhum texto extraído do PDF!")
             text = "Nenhum texto encontrado no PDF."
         else:
-            logging.info(f"Extraído {len(text)} caracteres do PDF")
+            # Agora vamos identificar as posições dos itálicos
+            italic_positions = []
             
-            # Agora vamos processar o texto para encontrar itálicos
-            logging.debug("Iniciando processamento de formatação")
-            from pdfminer.high_level import extract_pages
-            
-            # Lista para guardar os ranges de texto em itálico
-            italic_ranges = []
-            
-            # Encontra todos os trechos em itálico
+            # Segundo passo: identificar as posições dos textos em itálico
             for page_layout in extract_pages(input_pdf, laparams=laparams):
                 for element in page_layout:
                     if isinstance(element, LTTextBox):
                         for line in element:
                             if isinstance(line, LTTextLine):
+                                current_position = 0
                                 for char in line:
                                     if isinstance(char, LTChar):
-                                        # Pega o texto e posição
                                         char_text = char.get_text()
-                                        
-                                        # Verifica se é itálico
-                                        font_name = getattr(char, 'fontname', '').lower()
-                                        logging.debug(f"Caractere '{char_text}' - Fonte: {font_name}")
-                                        
-                                        is_italic = any(marker in font_name for marker in 
-                                                      ['italic', 'oblique', '-it', '_i', '.it', '/it'])
-                                        
-                                        if is_italic:
-                                            # Salva a posição do caractere no texto
-                                            pos = text.find(char_text)
-                                            if pos >= 0:
-                                                italic_ranges.append((pos, pos + len(char_text)))
+                                        if hasattr(char, 'fontname'):
+                                            font_name = char.fontname.lower()
+                                            logging.debug(f"Fonte encontrada: {font_name} para '{char_text}'")
+                                            
+                                            # Procura pelo texto exato no texto base
+                                            start_pos = text.find(char_text)
+                                            if start_pos >= 0:
+                                                # Verifica se é itálico
+                                                is_italic = any(marker in font_name for marker in [
+                                                    'italic', 'oblique', '-it', '_i', 'it-', '/it',
+                                                    'italicmt', 'italictype', 'slanted', 'inclined'
+                                                ])
+                                                
+                                                if is_italic:
+                                                    italic_positions.append((start_pos, start_pos + len(char_text)))
             
-            logging.debug(f"Encontrados {len(italic_ranges)} trechos em itálico")
+            logging.debug(f"Posições de itálico encontradas: {italic_positions}")
             
-            # Merge ranges sobrepostos
-            if italic_ranges:
-                italic_ranges.sort()
-                merged_ranges = []
-                current_start, current_end = italic_ranges[0]
+            # Terceiro passo: aplicar os marcadores de itálico
+            if italic_positions:
+                # Ordena as posições
+                italic_positions.sort(reverse=True)  # Processa de trás para frente
                 
-                for start, end in italic_ranges[1:]:
-                    if start <= current_end + 1:  # +1 para considerar caracteres adjacentes
-                        current_end = max(current_end, end)
-                    else:
-                        merged_ranges.append((current_start, current_end))
-                        current_start, current_end = start, end
-                merged_ranges.append((current_start, current_end))
-                
-                # Aplica os marcadores de itálico
-                offset = 0
-                for start, end in merged_ranges:
-                    start += offset
-                    end += offset
+                # Aplica os marcadores
+                for start, end in italic_positions:
                     text = text[:start] + '*' + text[start:end] + '*' + text[end:]
-                    offset += 2  # Ajusta o offset pelos asteriscos adicionados
             
             # Remove hifenização
             text = remove_hyphenation(text)
