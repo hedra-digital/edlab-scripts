@@ -11,6 +11,8 @@ from io import StringIO
 from pdfminer.high_level import extract_text_to_fp
 from pdfminer.layout import LAParams, LTTextBox, LTTextLine, LTChar
 import re
+import fitz  # PyMuPDF
+
 
 # Configuração do logging para depuração
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -500,95 +502,70 @@ def remove_hyphenation(text):
     
     return dehyphenated
 
+
 def extract_text_with_italics(input_pdf, output_file=None):
-    """Extrai texto de um PDF mantendo a formatação de itálicos em Markdown."""
+    """
+    Extrai texto de um PDF com formatação de itálico usando PyMuPDF.
+    """
     try:
-        from pdfminer.high_level import extract_pages
-        from pdfminer.layout import LAParams, LTTextBox, LTTextLine, LTChar
-        from io import StringIO
+        # Abre o documento
+        doc = fitz.open(input_pdf)
+        text_blocks = []
         
-        laparams = LAParams(
-            line_overlap=0.5,
-            char_margin=2.0,
-            line_margin=0.5,
-            word_margin=0.1,
-            boxes_flow=0.5,
-            detect_vertical=False,
-            all_texts=True
-        )
-        
-        output_buffer = []
-        current_line = []
-        in_italic = False
-        
-        # Processa cada página do PDF
-        for page_layout in extract_pages(input_pdf, laparams=laparams):
-            for element in page_layout:
-                if isinstance(element, LTTextBox):
-                    for text_line in element:
-                        if isinstance(text_line, LTTextLine):
-                            current_text = ""
-                            for char in text_line:
-                                if isinstance(char, LTChar):
-                                    # Verifica se é a fonte itálica
-                                    if hasattr(char, 'fontname'):
-                                        font_name = char.fontname.lower()
-                                        is_italic = "minionpro-it" in font_name
-                                        if is_italic != in_italic:
-                                            # Se mudou o estado do itálico
-                                            if current_text:
-                                                # Adiciona o texto acumulado com a formatação atual
-                                                if in_italic:
-                                                    current_line.append(f"*{current_text}*")
-                                                else:
-                                                    current_line.append(current_text)
-                                                current_text = ""
-                                            in_italic = is_italic
-                                    current_text += char.get_text()
-                                    
-                            # Processa qualquer texto restante na linha
-                            if current_text:
-                                if in_italic:
-                                    current_line.append(f"*{current_text}*")
-                                else:
-                                    current_line.append(current_text)
-                            
-                            # Adiciona a linha ao buffer principal
-                            if current_line:
-                                output_buffer.append(''.join(current_line))
-                                current_line = []
-                                output_buffer.append('\n')
+        # Para cada página
+        for page in doc:
+            # Extrai dicionário com informações detalhadas do texto
+            blocks = page.get_text("dict")["blocks"]
             
-            # Adiciona quebra extra entre páginas
-            output_buffer.append('\n')
+            for block in blocks:
+                if "lines" in block:
+                    for line in block["lines"]:
+                        line_text = []
+                        for span in line["spans"]:
+                            # Extrai texto e informações da fonte
+                            text = span["text"]
+                            font = span["font"].lower()  # Nome da fonte
+                            flags = span["flags"]  # Flags de formatação
+                            
+                            # Identifica itálico baseado no nome da fonte ou flags
+                            is_italic = ("minionpro-it" in font or 
+                                       "italic" in font or 
+                                       (flags & 2**0))  # bit 0 = italic flag
+                            
+                            # Adiciona marcadores markdown para itálico
+                            if is_italic:
+                                text = f"*{text}*"
+                            
+                            line_text.append(text)
+                            
+                        # Junta o texto da linha
+                        if line_text:
+                            text_blocks.append("".join(line_text))
+            
+            # Adiciona quebra de página
+            text_blocks.append("\n\n")
         
         # Junta todo o texto
-        text = ''.join(output_buffer)
+        full_text = "\n".join(text_blocks)
         
-        if not text.strip():
-            logging.warning("Nenhum texto extraído do PDF!")
-            text = "Nenhum texto encontrado no PDF."
-        else:
-            logging.info(f"Extraído {len(text)} caracteres do PDF")
-            # Remove hifenização
-            text = remove_hyphenation(text)
-        
-        # Define o arquivo de saída se não fornecido
+        # Define arquivo de saída se não fornecido
         if output_file is None:
-            output_file = generate_output_filename(input_pdf, "extracted_text", ".md")
+            output_file = input_pdf.replace(".pdf", "_extracted.md")
         
-        # Salva o texto processado
-        with open(output_file, 'w', encoding='utf-8') as fout:
-            fout.write(text)
-        
-        logging.info(f"Texto com itálicos extraído e salvo em: {output_file}")
+        # Salva o texto
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(full_text)
+            
+        print(f"Texto extraído e salvo em: {output_file}")
         return output_file
         
     except Exception as e:
-        logging.error(f"Erro ao extrair texto do PDF: {str(e)}")
-        import traceback
-        logging.error(f"Traceback completo:\n{traceback.format_exc()}")
+        print(f"Erro ao extrair texto: {str(e)}")
         raise
+    finally:
+        if 'doc' in locals():
+            doc.close()
+
 
 def extract_text_from_pdf(input_pdf, output_file=None):
     """
