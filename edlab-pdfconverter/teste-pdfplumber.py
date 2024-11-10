@@ -204,7 +204,7 @@ def merge_texts(paragraphs: str, italics: str) -> str:
 
 def main():
     configure_logging()
-    pdf_path = "inputB.pdf"
+    pdf_path = "sample.pdf"
     
     # Arquivos de saída
     paragraphs_file = "output_paragraphs.md"
