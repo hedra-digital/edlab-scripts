@@ -19,4 +19,4 @@ clean:
 	-rm img2 -rf
 	-rm img3 -rf
 	-rm PAGES.txt 
-	-rm *pages* *merge* *extracted_* log.txt
+	-rm *pages* *merge* *extracted_* log.txt output*

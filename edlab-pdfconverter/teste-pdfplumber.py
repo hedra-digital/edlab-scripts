@@ -139,21 +139,21 @@ def extract_italics(page) -> str:
 def clean_italics(text: str) -> str:
     """Limpa os itálicos, garantindo que espaços fiquem fora das marcações"""
     
-    # Encontra todos os trechos em itálico (tanto * quanto **)
     def fix_italic_segment(match):
-        markers = match.group(1)  # * ou **
+        # Agora usamos sempre um asterisco
         content = match.group(2)  # texto entre os marcadores
+        content = content.strip()  # remove espaços do início e fim
         
-        # Remove espaços do início e fim do conteúdo
-        content = content.strip()
-        
-        # Se tinha espaço antes ou depois, preserva fora do itálico
+        # Preserva espaços externos
         prefix = ' ' if match.group(0).startswith(' ') else ''
         suffix = ' ' if match.group(0).endswith(' ') else ''
         
-        return f"{prefix}{markers}{content}{markers}{suffix}"
+        return f"{prefix}*{content}*{suffix}"
     
-    # Aplica a correção para * e **
+    # Primeiro converte ** para *
+    text = text.replace('**', '*')
+    
+    # Procura por quaisquer marcações de itálico e padroniza para *
     text = re.sub(r'(\*\*?)\s*(.*?)\s*(\*\*?)', fix_italic_segment, text)
     
     return text
@@ -174,8 +174,8 @@ def clean_text(text: str) -> str:
 
 def merge_texts(paragraphs: str, italics: str) -> str:
     """Tenta mesclar texto com parágrafos e marcações de itálico"""
-    # Remove formatação extra do texto com itálicos
-    clean_italics = re.sub(r'\s+', ' ', italics).strip()
+    # Limpa e padroniza os itálicos primeiro
+    italics_cleaned = clean_italics(italics)
     result = []
     
     # Processa cada parágrafo
@@ -183,18 +183,24 @@ def merge_texts(paragraphs: str, italics: str) -> str:
         modified_paragraph = paragraph
         
         # Procura por trechos em itálico
-        for match in re.finditer(r'\*(.*?)\*', clean_italics):
-            italic_text = match.group(1)
+        for match in re.finditer(r'(\*\*?)(.*?)(\*\*?)', italics_cleaned):
+            italic_text = match.group(2).strip()
+            if not italic_text:  # Ignora itálicos vazios
+                continue
+                
             # Procura o texto em itálico no parágrafo
             text_pos = modified_paragraph.lower().find(italic_text.lower())
             if text_pos >= 0:
                 before = modified_paragraph[:text_pos]
                 after = modified_paragraph[text_pos + len(italic_text):]
+                # Sempre usa um único asterisco
                 modified_paragraph = f"{before}*{italic_text}*{after}"
         
         result.append(modified_paragraph)
     
-    return '\n\n'.join(result)
+    # Aplica limpeza final para garantir uso de um único asterisco
+    final_text = '\n\n'.join(result)
+    return clean_italics(final_text)
 
 def main():
     configure_logging()
