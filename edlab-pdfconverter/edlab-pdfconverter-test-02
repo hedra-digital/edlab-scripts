@@ -11,6 +11,8 @@ from io import StringIO
 from pdfminer.high_level import extract_text_to_fp
 from pdfminer.layout import LAParams, LTTextBox, LTTextLine, LTChar
 import re
+from pdfminer.converter import TextConverter
+
 
 # Configuração do logging para depuração
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -500,43 +502,88 @@ def remove_hyphenation(text):
     
     return dehyphenated
 
+def setup_logging(debug=False):
+    """Configura o logging com saída para arquivo e console."""
+    log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    root_logger = logging.getLogger()
+    
+    # Define o nível de log baseado no modo debug
+    root_logger.setLevel(logging.DEBUG if debug else logging.INFO)
+    
+    # Handler para arquivo
+    file_handler = logging.FileHandler('pdf_converter.log', mode='w')
+    file_handler.setFormatter(log_formatter)
+    root_logger.addHandler(file_handler)
+    
+    # Handler para console
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(log_formatter)
+    root_logger.addHandler(console_handler)
+
+class ItalicsTextConverter(TextConverter):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.current_font = None
+        self._text = []
+        self._in_italics = False
+        self.processed_fonts = set()  # Conjunto para rastrear fontes únicas
+        self.char_count = 0
+        self.italic_chars = 0
+        
+    def write_text(self, text):
+        if self._in_italics:
+            self._text.append(f"*{text}*")
+            self.italic_chars += len(text)
+        else:
+            self._text.append(text)
+        self.char_count += len(text)
+        
+    def begin_char_layout(self, char: LTChar):
+        font_name = char.fontname.lower() if hasattr(char, 'fontname') else ''
+        
+        # Registra nova fonte encontrada
+        if font_name and font_name not in self.processed_fonts:
+            self.processed_fonts.add(font_name)
+            logging.debug(f"Nova fonte encontrada: {font_name}")
+        
+        is_italic = ('italic' in font_name or 'oblique' in font_name or '-it' in font_name)
+        
+        # Log detalhado no modo debug
+        if logging.getLogger().level == logging.DEBUG:
+            char_info = {
+                'char': char.get_text() if hasattr(char, 'get_text') else '',
+                'font': font_name,
+                'size': round(char.size, 2) if hasattr(char, 'size') else 'N/A',
+                'is_italic': is_italic,
+                'bbox': [round(x, 2) for x in char.bbox] if hasattr(char, 'bbox') else 'N/A'
+            }
+            logging.debug(f"Char Info: {char_info}")
+        
+        # Se mudar o estado do itálico
+        if is_italic != self._in_italics:
+            self._in_italics = is_italic
+            if logging.getLogger().level == logging.DEBUG:
+                logging.debug(f"Mudança de estilo: {'itálico' if is_italic else 'normal'}")
+            
+        super().begin_char_layout(char)
+    
+    def get_text(self):
+        return ''.join(self._text)
+    
+    def get_statistics(self):
+        """Retorna estatísticas do processamento."""
+        return {
+            'total_chars': self.char_count,
+            'italic_chars': self.italic_chars,
+            'italic_percentage': round((self.italic_chars / self.char_count * 100) if self.char_count > 0 else 0, 2),
+            'unique_fonts': list(self.processed_fonts)
+        }
+
 
 def extract_text_with_italics(input_pdf, output_file=None):
     """Extrai texto de um PDF, identifica itálicos e converte para Markdown."""
     try:
-        from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
-        from pdfminer.pdfpage import PDFPage
-        from pdfminer.converter import TextConverter
-        from pdfminer.layout import LAParams, LTTextBox, LTTextLine, LTChar
-        from io import StringIO
-        
         logging.info(f"Iniciando extração de texto do arquivo: {input_pdf}")
-        
-        class ItalicsTextConverter(TextConverter):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-                self.current_font = None
-                self._text = []
-                self._in_italics = False
-            
-            def write_text(self, text):
-                if self._in_italics:
-                    self._text.append(f"*{text}*")
-                else:
-                    self._text.append(text)
-            
-            def begin_char_layout(self, char: LTChar):
-                font_name = char.fontname.lower() if hasattr(char, 'fontname') else ''
-                is_italic = ('italic' in font_name or 'oblique' in font_name or '-it' in font_name)
-                
-                # Se mudar o estado do itálico
-                if is_italic != self._in_italics:
-                    self._in_italics = is_italic
-                    
-                super().begin_char_layout(char)
-            
-            def get_text(self):
-                return ''.join(self._text)
         
         # Configuração para extração
         rsrcmgr = PDFResourceManager()
@@ -556,12 +603,37 @@ def extract_text_with_italics(input_pdf, output_file=None):
         # Extrai o texto
         with open(input_pdf, 'rb') as fp:
             interpreter = PDFPageInterpreter(rsrcmgr, device)
-            for page in PDFPage.get_pages(fp):
+            for page_num, page in enumerate(PDFPage.get_pages(fp), 1):
+                logging.info(f"Processando página {page_num}")
                 interpreter.process_page(page)
-                logging.debug("Página processada")
+                
+                if logging.getLogger().level == logging.DEBUG:
+                    # Log de estatísticas por página
+                    stats = device.get_statistics()
+                    logging.debug(f"Estatísticas da página {page_num}:")
+                    logging.debug(f"- Caracteres totais: {stats['total_chars']}")
+                    logging.debug(f"- Caracteres em itálico: {stats['italic_chars']}")
+                    logging.debug(f"- Porcentagem em itálico: {stats['italic_percentage']}%")
+                    logging.debug("- Fontes encontradas:")
+                    for font in stats['unique_fonts']:
+                        logging.debug(f"  - {font}")
         
         # Obtém o texto processado
         text = device.get_text()
+        
+        # Log final de estatísticas
+        final_stats = device.get_statistics()
+        logging.info("Estatísticas finais do processamento:")
+        logging.info(f"- Total de caracteres processados: {final_stats['total_chars']}")
+        logging.info(f"- Caracteres em itálico: {final_stats['italic_chars']}")
+        logging.info(f"- Porcentagem do texto em itálico: {final_stats['italic_percentage']}%")
+        logging.info(f"- Total de fontes únicas encontradas: {len(final_stats['unique_fonts'])}")
+        
+        if logging.getLogger().level == logging.DEBUG:
+            logging.debug("Lista completa de fontes encontradas:")
+            for font in sorted(final_stats['unique_fonts']):
+                logging.debug(f"- {font}")
+        
         device.close()
         retstr.close()
         
@@ -569,7 +641,6 @@ def extract_text_with_italics(input_pdf, output_file=None):
             logging.warning("Nenhum texto foi extraído do PDF!")
             text = "Nenhum texto encontrado no PDF."
         else:
-            logging.info(f"Extraído {len(text)} caracteres do PDF")
             text = remove_hyphenation(text)
         
         # Define o arquivo de saída se não fornecido
@@ -588,6 +659,7 @@ def extract_text_with_italics(input_pdf, output_file=None):
         import traceback
         logging.error(f"Traceback completo:\n{traceback.format_exc()}")
         raise
+
 
 def extract_text_from_pdf(input_pdf, output_file=None):
     """
@@ -664,6 +736,7 @@ def generate_output_filename(input_path, suffix="", ext=None):
 # Modifique a função main para incluir a nova opção:
 
 def main():
+    
     parser = argparse.ArgumentParser(description="Manipulação de arquivos PDF: juntar, remover texto, cortar margens, extrair páginas e converter para imagens.")
     
     parser.add_argument("-i", "--input", required=True, nargs='+',
@@ -688,8 +761,14 @@ def main():
                        help="Extrai texto do PDF removendo hifenizações")
     parser.add_argument("-eti", "--extract-text-italics", action='store_true',
                        help="Extrai texto do PDF com formatação de itálico em Markdown")
+    parser.add_argument("--debug", action="store_true",
+                       help="Ativa o modo de debug com log detalhado")
+    
 
     args = parser.parse_args()
+
+    # Configura o logging baseado na opção de debug
+    setup_logging(args.debug)
 
     try:
         # Encontra todos os arquivos PDF com base nos argumentos de entrada
@@ -834,3 +913,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
