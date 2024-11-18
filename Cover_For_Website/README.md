@@ -24,7 +24,7 @@ mogrify -resize 200 *.png
 5. Importar 
 
 ## Tutorial
-[![Thumbnail do vídeo](https://app.screencastify.com/v2/manage/videos/sPBe5a5ExOUDrYFaP0Gr)
+[Thumbnail do vídeo](https://app.screencastify.com/v2/manage/videos/sPBe5a5ExOUDrYFaP0Gr)
 
 ## Falta
 
