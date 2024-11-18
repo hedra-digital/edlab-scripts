@@ -23,6 +23,9 @@ mogrify -resize 200 *.png
 4. Criar rotina para CSV de importação
 5. Importar 
 
+## Tutorial
+[![Thumbnail do vídeo](https://app.screencastify.com/v2/manage/videos/sPBe5a5ExOUDrYFaP0Gr)
+
 ## Falta
 
 1. Tratar os problemas e refazer as etapas para esse lote 2 (ou fazer na mão)
