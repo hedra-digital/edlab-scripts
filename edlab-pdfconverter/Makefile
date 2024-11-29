@@ -7,8 +7,10 @@ test:
 	./edlab-pdfconverter -i input.pdf BLANK output1.pdf -j 
 	echo "=== TESTE 3: Juntar pdfs ========================================================"
 	./edlab-pdfconverter -i *.pdf --page-counter
-	echo "=== TESTE 4: Extrair texto de pdfs ========================================================"
+	echo "=== TESTE 4: Extrair texto de pdfs =============================================="
 	./edlab-pdfconverter -i inputB.pdf --extract-text
+	echo "=== TESTE 5: Colocar uma marca d'água no texto =================================="
+	./edlab-pdfconverter -i sample.pdf --watermark
 
 clean:
 	-rm output.pdf
@@ -19,4 +21,4 @@ clean:
 	-rm img2 -rf
 	-rm img3 -rf
 	-rm PAGES.txt 
-	-rm *pages* *merge* *extracted_* log.txt output*
+	-rm *pages* *merge* *extracted_* log.txt output* *_watermark*

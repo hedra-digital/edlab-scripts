@@ -89,27 +89,35 @@ Isso irá converter apenas as páginas 1 a 3 do PDF para PNG no diretório img.
 ./edlab-pdfconverter -i inputB.pdf -o output.pdf -et
 ``` 
 
+## Para incluir uma marca d'água personalizada:
 
-Isso converterá apenas a página 1 do PDF em PNG.
+```bash
+python script.py -i arquivo.pdf --watermark
+python script.py -i arquivo.pdf --watermark "Confidencial"
+```
+
 
 # Opções
 
 ```
   -h, --help            show this help message and exit
-  -i INPUT, --input INPUT
-                        Caminho para o arquivo PDF de entrada.
+  -i INPUT [INPUT ...], --input INPUT [INPUT ...]
+                        Arquivo(s) PDF de entrada, diretório(s) ou padrões (*.pdf). Use 'BLANK' para inserir páginas em branco quando usando --join
   -o OUTPUT, --output OUTPUT
-                        Caminho para o arquivo PDF de saída.
+                        Arquivo de saída para operações em arquivo único ou junção, ou diretório para múltiplos arquivos.
   -m MARGINS, --margins MARGINS
-                        Margens para o corte com pdfcrop. Use um valor ou quatro valores para margens separadas (esquerda, direita, cima, baixo).
+                        Margens para o corte com pdfcrop. Use um valor ou quatro valores para margens separadas.
   -d DIR, --dir DIR     Diretório onde as imagens serão salvas.
   -p PAGES, --pages PAGES
-                        Intervalo de páginas para extrair ou processar, por exemplo '1-3' ou '1'.
+                        Intervalo de páginas para processar ou extrair (ex: '1-3' ou '1').
   -f FORMAT, --format FORMAT
                         Formato da imagem de saída (jpeg ou png). Padrão: jpeg.
   -rt, --remove-text    Remove o texto do PDF antes de cortar margens e converter em imagens.
+  -j, --join            Junta múltiplos PDFs em um único arquivo.
   --page-counter        Conta o número de páginas dos PDFs e gera relatório em PAGES.txt
   -et, --extract-text   Extrai texto do PDF removendo hifenizações
+  -w [WATERMARK], --watermark [WATERMARK]
+                        Adiciona marca d'água ao PDF. Use sem valor para 'SECRET' ou especifique o texto desejado.
 ```
 
 
