@@ -7,13 +7,65 @@ import logging
 from PyPDF2 import PdfReader, PdfWriter
 from pdf2image import convert_from_path
 from datetime import datetime
-from io import StringIO
+from io import StringIO, BytesIO
 from pdfminer.high_level import extract_text_to_fp
 from pdfminer.layout import LAParams
+from reportlab.pdfgen import canvas
+from reportlab.lib.colors import Color
+from reportlab.lib.pagesizes import letter
 import re
 
 # Configuração do logging para depuração
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def create_watermark(text="WATERMARK"):
+    """Cria uma marca d'água em um PDF temporário"""
+    # Criar um buffer de memória para o PDF
+    packet = BytesIO()
+    
+    # Criar um novo PDF com ReportLab
+    can = canvas.Canvas(packet, pagesize=letter)
+    
+    # Definir a cor cinza clara (RGB: 0.8, 0.8, 0.8, alpha: 0.3)
+    light_gray = Color(0.8, 0.8, 0.8, alpha=0.3)
+    can.setFillColor(light_gray)
+    
+    # Definir fonte e tamanho
+    can.setFont("Helvetica", 60)
+    
+    # Rotacionar e posicionar o texto
+    can.saveState()
+    can.translate(300, 400)
+    can.rotate(45)
+    can.drawCentredString(0, 0, text)
+    can.restoreState()
+    
+    can.save()
+    
+    # Mover para o início do buffer
+    packet.seek(0)
+    return PdfReader(packet)
+
+def add_watermark(input_path, output_path, watermark_text="WATERMARK"):
+    """Adiciona marca d'água a todas as páginas do PDF"""
+    # Criar a marca d'água
+    watermark = create_watermark(watermark_text)
+    watermark_page = watermark.pages[0]
+    
+    # Abrir o PDF original
+    reader = PdfReader(input_path)
+    writer = PdfWriter()
+    
+    # Adicionar marca d'água em cada página
+    for page in reader.pages:
+        page.merge_page(watermark_page)
+        writer.add_page(page)
+    
+    # Salvar o PDF resultante
+    with open(output_path, 'wb') as output_file:
+        writer.write(output_file)
+    
+    logging.info(f"Marca d'água adicionada com sucesso em: {output_path}")
 
 
 
@@ -577,7 +629,7 @@ def generate_output_filename(input_path, suffix="", ext=None):
 # Modifique a função main para incluir a nova opção:
 
 def main():
-    parser = argparse.ArgumentParser(description="Manipulação de arquivos PDF: juntar, remover texto, cortar margens, extrair páginas e converter para imagens.")
+    parser = argparse.ArgumentParser(description="Manipulação de arquivos PDF: juntar, remover texto, cortar margens, extrair páginas, converter para imagens e adicionar marca d'água.")
     
     parser.add_argument("-i", "--input", required=True, nargs='+',
                        help="Arquivo(s) PDF de entrada, diretório(s) ou padrões (*.pdf). Use 'BLANK' para inserir páginas em branco quando usando --join")
@@ -599,6 +651,8 @@ def main():
                        help="Conta o número de páginas dos PDFs e gera relatório em PAGES.txt")
     parser.add_argument("-et", "--extract-text", action='store_true',
                        help="Extrai texto do PDF removendo hifenizações")
+    parser.add_argument("-w", "--watermark", 
+                       help="Adiciona marca d'água ao PDF. Especifique o texto da marca d'água.")
 
     args = parser.parse_args()
 
@@ -612,7 +666,6 @@ def main():
 
         # Se a opção --extract-text foi especificada
         if args.extract_text:
-            # Processa cada arquivo PDF encontrado
             for input_file in [f for f in input_files if f != "BLANK"]:
                 output_file = args.output if args.output else None
                 try:
@@ -621,14 +674,9 @@ def main():
                 except Exception as e:
                     logging.error(f"Erro ao processar {input_file}: {str(e)}")
             return
-        
-        if not input_files:
-            logging.error("Nenhum arquivo PDF encontrado")
-            return
 
         # Se a opção --page-counter foi especificada
         if args.page_counter:
-            # Filtra apenas os arquivos PDF (remove BLANK se houver)
             pdf_files = [f for f in input_files if f != "BLANK"]
             if not pdf_files:
                 logging.error("Nenhum arquivo PDF válido encontrado para contagem")
@@ -640,14 +688,12 @@ def main():
             
         # Se for junção de PDFs
         if args.join:
-            # Verifica se tem BLANK na sequência
             has_blank = any(item == "BLANK" for item in input_files)
             
             if has_blank:
                 if args.output:
                     output_file = args.output if args.output.lower().endswith('.pdf') else args.output + '.pdf'
                 else:
-                    # Encontra o primeiro PDF na sequência para usar como base do nome
                     first_pdf = next((f for f in input_files if f != "BLANK"), None)
                     if not first_pdf:
                         logging.error("Nenhum arquivo PDF encontrado na sequência")
@@ -658,9 +704,7 @@ def main():
                     logging.info("Operação de junção com páginas em branco concluída com sucesso")
                 else:
                     logging.error("Falha na operação de junção com páginas em branco")
-                return
             else:
-                # Remove quaisquer "BLANK" da lista para junção normal
                 pdf_files = [f for f in input_files if f != "BLANK"]
                 if len(pdf_files) < 2:
                     logging.error("São necessários pelo menos 2 arquivos PDF para juntar")
@@ -675,10 +719,17 @@ def main():
                     logging.info("Operação de junção concluída com sucesso")
                 else:
                     logging.error("Falha na operação de junção")
-                return
+                    return
+
+            # Adiciona marca d'água ao PDF unificado se especificado
+            if args.watermark:
+                watermark_output = generate_output_filename(output_file, "watermark")
+                add_watermark(output_file, watermark_output, args.watermark)
+                os.remove(output_file)  # Remove o arquivo intermediário
+                os.rename(watermark_output, output_file)
+            return
 
         # Para operações em arquivo único
-        # Usa apenas o primeiro arquivo PDF encontrado
         input_file = next((f for f in input_files if f != "BLANK"), None)
         if not input_file:
             logging.error("Nenhum arquivo PDF válido encontrado para processamento")
@@ -693,6 +744,8 @@ def main():
                 suffix.append("notext")
             if args.margins:
                 suffix.append("cropped")
+            if args.watermark:
+                suffix.append("watermark")
             
             suffix_str = "_".join(suffix) if suffix else ""
             args.output = generate_output_filename(input_file, suffix_str)
@@ -720,6 +773,13 @@ def main():
             crop_pdf_with_pdfcrop(args.output, cropped_output, args.margins)
             os.remove(args.output)
             rename_file(cropped_output, args.output)
+
+        # Adiciona marca d'água se especificado
+        if args.watermark:
+            watermark_output = generate_output_filename(args.output, "watermark")
+            add_watermark(args.output, watermark_output, args.watermark)
+            os.remove(args.output)
+            rename_file(watermark_output, args.output)
 
         if page_range and os.path.exists(temp_pdf):
             os.remove(temp_pdf)
