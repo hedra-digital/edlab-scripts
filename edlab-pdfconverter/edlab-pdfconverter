@@ -640,7 +640,7 @@ def main():
     parser.add_argument("-d", "--dir", 
                        help="Diretório onde as imagens serão salvas.")
     parser.add_argument("-p", "--pages", 
-                       help="Intervalo de páginas para processar (ex: '1-3' ou '1').")
+                       help="Intervalo de páginas para processar ou extrair (ex: '1-3' ou '1').")
     parser.add_argument("-f", "--format", default="jpeg",
                        help="Formato da imagem de saída (jpeg ou png). Padrão: jpeg.")
     parser.add_argument("-rt", "--remove-text", action='store_true',
@@ -651,8 +651,9 @@ def main():
                        help="Conta o número de páginas dos PDFs e gera relatório em PAGES.txt")
     parser.add_argument("-et", "--extract-text", action='store_true',
                        help="Extrai texto do PDF removendo hifenizações")
-    parser.add_argument("-w", "--watermark", 
-                       help="Adiciona marca d'água ao PDF. Especifique o texto da marca d'água.")
+    parser.add_argument("-w", "--watermark", nargs='?', const='SECRET', 
+                       help="Adiciona marca d'água ao PDF. Use sem valor para 'SECRET' ou especifique o texto desejado.")
+
 
     args = parser.parse_args()
 
