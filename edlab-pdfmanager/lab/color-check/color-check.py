@@ -1,19 +1,23 @@
-from PyPDF2 import PdfReader
-import re
+import fitz  # PyMuPDF
+import PIL.Image
+import io
 
-def check_pdf_color(pdf_path):
-    reader = PdfReader(pdf_path)
-    has_color = False
+def check_pdf_colors(pdf_path):
+    doc = fitz.open(pdf_path)
     
-    for page in reader.pages:
-        content = page.extract_text()
-        if '/DeviceRGB' in str(page) or '/DeviceCMYK' in str(page):
-            has_color = True
-            break
-    
-    return "Color" if has_color else "Grayscale"
+    for page in doc:
+        pix = page.get_pixmap()
+        img_data = pix.samples
+        image = PIL.Image.frombytes("RGB", [pix.width, pix.height], img_data)
+        
+        # Verifica se há pixels não-cinza
+        for pixel in image.getdata():
+            r, g, b = pixel
+            if not (r == g == b):
+                return True
+                
+    return False
 
-# Usage
-pdf_file = "ficha-pb_modified.pdf"
-result = check_pdf_color(pdf_file)
-print(f"PDF is in {result}")
+pdf_file = "exemplo.pdf"
+is_color = check_pdf_colors(pdf_file)
+print(f"O PDF é: {'Colorido' if is_color else 'Preto e Branco'}")
