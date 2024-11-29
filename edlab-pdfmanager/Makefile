@@ -11,6 +11,11 @@ test:
 	./edlab-pdfmanager -i inputB.pdf --extract-text
 	echo "=== TESTE 5: Colocar uma marca d'água no texto =================================="
 	./edlab-pdfmanager -i sample.pdf --watermark
+	echo "=== TESTE 6: verificar as cores ================================================="
+	./edlab-pdfmanager -i inputB.pdf --check-color
+	echo "=== TESTE 7: contas as páginas =================================================="
+	./edlab-pdfmanager -i inputB.pdf --page-counter
+
 
 clean:
 	-rm output.pdf
