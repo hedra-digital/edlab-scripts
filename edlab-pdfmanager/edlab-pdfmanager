@@ -14,9 +14,59 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.colors import Color
 from reportlab.lib.pagesizes import letter
 import re
+import fitz
+import PIL.Image
+from tqdm import tqdm
+import numpy as np
+
 
 # Configuração do logging para depuração
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def analyze_pdf_colors(pdf_path):
+    """Analisa cores em um PDF."""
+    doc = fitz.open(pdf_path)
+    results = {
+        'is_color': False,
+        'pages_info': [],
+        'color_coverage': 0
+    }
+    
+    total_pixels = 0
+    color_pixels = 0
+    
+    for page_num in tqdm(range(doc.page_count), desc="Analisando páginas"):
+        page = doc[page_num]
+        pix = page.get_pixmap()
+        img_data = pix.samples
+        image = PIL.Image.frombytes("RGB", [pix.width, pix.height], img_data)
+        
+        pixels = np.array(image)
+        is_gray = np.all(pixels[:,:,0] == pixels[:,:,1]) & np.all(pixels[:,:,1] == pixels[:,:,2])
+        page_color_pixels = np.sum(~is_gray)
+        page_total_pixels = pixels.shape[0] * pixels.shape[1]
+        
+        if page_color_pixels > 0:
+            coverage = (page_color_pixels / page_total_pixels) * 100
+            results['pages_info'].append({
+                'number': page_num + 1,
+                'has_color': True,
+                'coverage': coverage
+            })
+            results['is_color'] = True
+        else:
+            results['pages_info'].append({
+                'number': page_num + 1,
+                'has_color': False,
+                'coverage': 0
+            })
+        
+        total_pixels += page_total_pixels
+        color_pixels += page_color_pixels
+    
+    results['color_coverage'] = (color_pixels / total_pixels) * 100 if total_pixels > 0 else 0
+    return results
+
 
 def create_watermark(text="WATERMARK"):
     """Cria uma marca d'água em um PDF temporário"""
@@ -653,6 +703,8 @@ def main():
                        help="Extrai texto do PDF removendo hifenizações")
     parser.add_argument("-w", "--watermark", nargs='?', const='SECRET', 
                        help="Adiciona marca d'água ao PDF. Use sem valor para 'SECRET' ou especifique o texto desejado.")
+    parser.add_argument("--check-color", action='store_true',
+                       help="Analisa se o PDF contém páginas coloridas")
 
 
     args = parser.parse_args()
@@ -660,6 +712,27 @@ def main():
     try:
         # Encontra todos os arquivos PDF com base nos argumentos de entrada
         input_files = find_pdf_files(args.input)
+        
+        if args.check_color:
+            pdf_files = [f for f in input_files if f != "BLANK"]
+            if not pdf_files:
+                logging.error("Nenhum arquivo PDF válido encontrado para análise de cores")
+                return
+            
+            for pdf_file in pdf_files:
+                try:
+                    results = analyze_pdf_colors(pdf_file)
+                    print(f"\nAnálise de cores: {pdf_file}")
+                    print("-" * 50)
+                    print(f"Status: {'Colorido' if results['is_color'] else 'Preto e Branco'}")
+                    print("\nDetalhes por página:")
+                    for page in results['pages_info']:
+                        status = "Colorida" if page['has_color'] else "P&B"
+                        print(f"Página {page['number']}: {status} (Cobertura: {page['coverage']:.1f}%)")
+                    print(f"\nCobertura total de cor: {results['color_coverage']:.1f}%")
+                except Exception as e:
+                    logging.error(f"Erro ao analisar cores em {pdf_file}: {str(e)}")
+            return
         
         if not input_files:
             logging.error("Nenhum arquivo PDF encontrado")
