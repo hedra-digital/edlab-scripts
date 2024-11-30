@@ -15,16 +15,18 @@ Uma ferramenta de linha de comando para manipulação avançada de arquivos PDF.
 
 #### Ubuntu/Debian
 ```bash
-# Instalar dependências do sistema
+
+sudo apt update
+sudo apt install ghostscript pdftk python3-pypdf2 python3-pdfminer.six python3-reportlab python3-tqdm python3-pil python3-fitz python3-pdf2docx
+
+# Instalar também dependências do sistema
 sudo apt-get update
 sudo apt-get install -y \
     ghostscript \
     pdftk \
     texlive-extra-utils \
     python3-pip \
-    python3-venv \
     poppler-utils
-
 ```
 
 #### Arch Linux
