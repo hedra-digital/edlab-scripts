@@ -8,6 +8,7 @@ import re
 import subprocess
 from datetime import datetime
 from io import StringIO, BytesIO
+from pdf2docx import Converter
 
 # Bibliotecas de terceiros
 import fitz
@@ -24,6 +25,44 @@ from tqdm import tqdm
 
 # Configuração do logging para depuração
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def process_pdf_to_docx(pdf_files):
+    """
+    Converte PDFs para formato DOCX.
+    """
+    if not pdf_files:
+        logging.error("Nenhum arquivo PDF válido encontrado para conversão")
+        return
+
+    with tqdm(total=len(pdf_files), desc="Arquivos processados") as file_pbar:
+        for input_file in pdf_files:
+            try:
+                output_file = generate_output_filename(input_file, "docx", ".docx")
+                file_pbar.write(f"\nProcessando: {os.path.basename(input_file)}")
+                
+                # Criar pasta de imagens se não existir
+                img_dir = os.path.join(os.path.dirname(output_file), "img_docx")
+                if not os.path.exists(img_dir):
+                    os.makedirs(img_dir)
+                
+                # Criar o conversor e realizar a conversão
+                cv = Converter(input_file)
+                try:
+                    cv.convert(
+                        output_file,
+                        start=0,
+                        delete_end_line_hyphen=True
+                    )
+                    file_pbar.write(f"✓ Concluído: {os.path.basename(output_file)}\n")
+                except Exception as e:
+                    file_pbar.write(f"Erro na conversão: {str(e)}")
+                finally:
+                    cv.close()
+                
+                file_pbar.update(1)
+                
+            except Exception as e:
+                file_pbar.write(f"Erro ao processar {input_file}: {str(e)}")
 
 def process_pdf_to_black(pdf_files):
     """
@@ -966,11 +1005,12 @@ def main():
                        help="Converte PDF para preto chapado (mantendo áreas brancas)")
     parser.add_argument("--convert-to-gray", action='store_true',
                        help="Converte PDF para escala de cinza")
+    parser.add_argument("--extract-to-docx", action='store_true',
+                       help="Converte PDF para formato DOCX")
 
     args = parser.parse_args()
 
     try:
-        # Encontra todos os arquivos PDF baseado nos argumentos de entrada
         input_files = find_pdf_files(args.input)
         
         if not input_files:
@@ -980,6 +1020,11 @@ def main():
         # Lista de arquivos PDF válidos (excluindo BLANKs)
         valid_pdfs = [f for f in input_files if f != "BLANK"]
         
+        # Adicionar nas opções de processamento (logo após as conversões de cores):
+        if args.extract_to_docx:
+            process_pdf_to_docx(valid_pdfs)
+            return
+      
         # 1. Processamentos de conversão de cores
         if args.convert_to_black:
             process_pdf_to_black(valid_pdfs)

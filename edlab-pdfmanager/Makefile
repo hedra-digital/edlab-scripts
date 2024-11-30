@@ -21,6 +21,8 @@ test:
 	./edlab-pdfmanager -i input.pdf --convert-to-black
 	echo "=== TESTE 10: convert-to-gray ==================================================="
 	./edlab-pdfmanager -i input.pdf --convert-to-gray
+	echo "=== TESTE 11: extract-to-docx ==================================================="
+	./edlab-pdfmanager -i inputB.pdf --extract-to-docx
 
 
 
@@ -33,4 +35,4 @@ clean:
 	-rm img2 -rf
 	-rm img3 -rf
 	-rm PAGES.txt 
-	-rm *pages* *merge* *extracted_* log.txt output* *_watermark* *compressed* *modified*
+	-rm *pages* *merge* *extracted_* log.txt output* *_watermark* *compressed* *modified* *.docx *gray* *black*
