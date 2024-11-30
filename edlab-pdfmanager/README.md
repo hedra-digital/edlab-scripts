@@ -6,6 +6,13 @@ Uma ferramenta de linha de comando para manipulação avançada de arquivos PDF.
 
 ### Dependências
 
+## Requisitos de Sistema
+
+- Python 3.6+
+- Ghostscript
+- pdfcrop (para corte de margens)
+- Espaço em disco suficiente para processamento de arquivos
+
 #### Ubuntu/Debian
 ```bash
 # Instalar dependências do sistema
@@ -40,7 +47,7 @@ pip install PyPDF2 pdf2image pdfminer.six reportlab tqdm PyMuPDF Pillow pdf2docx
 
 1. Clone o repositório:
 ```bash
-git clone [URL_DO_REPOSITORIO]
+git clone git@github.com:hedra-digital/edlab-scripts.git
 cd edlab-pdfmanager
 ```
 
@@ -172,46 +179,12 @@ O Makefile inclui 11 testes que verificam diferentes funcionalidades:
 
 Para executar um teste específico, você pode verificar o Makefile e rodar o comando manualmente.
 
-[... resto do README anterior ...]
-
-## Estrutura do Projeto
-
-```
-edlab-pdfmanager/
-├── edlab-pdfmanager  # Script principal
-├── Makefile          # Automação de instalação e testes
-├── README.md         # Documentação
-└── tests/            # Arquivos de teste
-    ├── input.pdf
-    └── ...
-```
-
-## Desenvolvimento
-
-Para contribuir com o projeto:
-
-1. Certifique-se de que todos os testes passam: `make test`
-2. Limpe os arquivos de teste antes de commits: `make clean`
-3. Adicione novos testes ao Makefile quando implementar novas funcionalidades
-
-# edlab-pdfmanager
-
-Uma ferramenta de linha de comando para manipulação avançada de arquivos PDF.
-
-
 ## Notas
 
 - Os arquivos processados são salvos com sufixos apropriados (ex: `_compressed`, `_black`, `_gray`)
 - Para junção de PDFs com páginas em branco, use "BLANK" como nome de arquivo
 - A compressão usa Ghostscript com configurações otimizadas
 - A conversão para preto chapado mantém áreas totalmente brancas
-
-## Requisitos de Sistema
-
-- Python 3.6+
-- Ghostscript
-- pdfcrop (para corte de margens)
-- Espaço em disco suficiente para processamento de arquivos
 
 ## Licença
 
