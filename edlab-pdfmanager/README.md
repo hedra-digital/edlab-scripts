@@ -1,143 +1,213 @@
-# Versão 1.4 
+# edlab-pdfmanager
 
-# Histórico
-No PNLD2026, precisamos criar imagens a partir dos PDFs para para o HTML. Essas imagens precisavam ser cropadas e sem o texto do livro. 
+Uma ferramenta de linha de comando para manipulação avançada de arquivos PDF.
 
-# Dependências
-```
-sudo pacman -S ghostscript poppler  # Para Ghostscript e pdf2image
-sudo pacman -S yay
-yay -S python-pdf2image python-pillow  # Usando yay para instalar pdf2image e Pillow do AUR
-yay -S python-pypdf2
-sudo pacman -S texlive-core # para o pdfcrop
-sudo pacman -S python-pdfminer
-```
+## Instalação
 
-## Instalação no Ubuntu
+### Dependências
 
-```
-sudo apt update
+#### Ubuntu/Debian
+```bash
+# Instalar dependências do sistema
+sudo apt-get update
+sudo apt-get install -y \
+    ghostscript \
+    pdftk \
+    texlive-extra-utils \
+    python3-pip \
+    python3-venv \
+    poppler-utils
 
-pip3 install --break-system-packages pdf2image Pillow PyPDF2  # precisa atualizar @paulo
-```
+# Criar e ativar ambiente virtual (opcional, mas recomendado)
+python3 -m venv venv
+source venv/bin/activate
 
-# Descrição
-
-
-## Extrair páginas
-
-```
-./edlab-pdfmanager -i input.pdf -o output.pdf -p 1-6
+# Instalar dependências Python
+pip install PyPDF2 pdf2image pdfminer.six reportlab tqdm PyMuPDF Pillow pdf2docx
 ```
 
-
-## Remover o texto do PDF e dar um crop no pdf final
-
-```
-./edlab-pdfmanager -i input.pdf -o output.pdf -d output_images -m '10 10 10 10'
+#### Arch Linux
+```bash
+yay -S ghostscript pdftk pdfcrop python-pypdf2 python-pdf2image python-pdfminer.six python-reportlab python-tqdm python-fitz python-pillow python-pdf2docx
 ```
 
-## Remover o texto do PDF e converter todas as páginas para PNG:
-```
-./edlab-pdfmanager -i input.pdf -o output.pdf -d img
+### Instalação do edlab-pdfmanager
+
+1. Clone o repositório:
+```bash
+git clone [URL_DO_REPOSITORIO]
+cd edlab-pdfmanager
 ```
 
-Isso vai gerar o arquivo output.pdf e converter todas as páginas do PDF para imagens PNG no diretório img.
-
-## Remover o texto e converter apenas algumas páginas (ex: 1 a 3):
-```
-./edlab-pdfmanager -i input.pdf -o output.pdf -d img -p 1-3
+2. Instalação usando Make:
+```bash
+sudo make install
 ```
 
-Isso irá converter apenas as páginas 1 a 3 do PDF para PNG no diretório img.
+Isto instalará o script em `/usr/local/bin`, tornando-o disponível globalmente no sistema.
 
-## Remover o texto e converter apenas uma página (ex: página 1):
 
-```
-./edlab-pdfmanager -i input.pdf -o output.pdf -d img -p 1
-```
+## Recursos
 
-## Juntar PDFs específicos
-```
-./edlab-pdfmanager -i arquivo1.pdf arquivo2.pdf arquivo3.pdf -j
-```
+- Juntar múltiplos PDFs
+- Comprimir PDFs
+- Converter cores (preto chapado ou escala de cinza)
+- Remover texto
+- Cortar margens
+- Extrair páginas específicas
+- Converter para imagens
+- Adicionar marca d'água
+- Analisar cores
+- Extrair texto
+- Contagem de páginas
+- Converter para DOCX
 
-## Juntar todos os PDFs do diretório atual
-```
-./edlab-pdfmanager -i *.pdf -j
-```
+## Uso
 
-## Juntar PDFs de um diretório específico
-```
-./edlab-pdfmanager -i ./pdfs -j
-```
-
-## Juntar PDFs com nome de saída específico
-```
-./edlab-pdfmanager -i *.pdf -j -o resultado.pdf
-```
-
-## Juntar PDFs específicos e colocar uma página ou mais páginas em branco (BLANK)
-
-```
-./edlab-pdfmanager -i input1.pdf BLANK input2.pdf -j -o output.pdf
-```
-
-## Para extrair textos `--extract-text -et`
-
-```
-./edlab-pdfmanager -i inputB.pdf -o output.pdf -et
-``` 
-
-## Para incluir uma marca d'água personalizada:
+### Exemplos básicos
 
 ```bash
-python script.py -i arquivo.pdf --watermark
-python script.py -i arquivo.pdf --watermark "Confidencial"
+# Juntar PDFs
+./edlab-pdfmanager -i arquivo1.pdf arquivo2.pdf -j
+
+# Comprimir PDF
+./edlab-pdfmanager -i input.pdf --shrink 150
+
+# Converter para preto chapado
+./edlab-pdfmanager -i input.pdf --convert-to-black
+
+# Converter para escala de cinza
+./edlab-pdfmanager -i input.pdf --convert-to-gray
+
+# Extrair páginas específicas
+./edlab-pdfmanager -i input.pdf -p 1-3 -o output.pdf
+
+# Adicionar marca d'água
+./edlab-pdfmanager -i input.pdf -w "CONFIDENCIAL"
+
+# Converter para DOCX
+./edlab-pdfmanager -i input.pdf --extract-to-docx
 ```
 
+### Opções avançadas
 
-# Opções
+```bash
+# Juntar PDFs com páginas em branco entre eles
+./edlab-pdfmanager -i arquivo1.pdf BLANK arquivo2.pdf -j
 
-```
-  -h, --help            show this help message and exit
-  -i INPUT [INPUT ...], --input INPUT [INPUT ...]
-                        Arquivo(s) PDF de entrada, diretório(s) ou padrões (*.pdf). Use 'BLANK' para inserir páginas em branco quando usando --join
-  -o OUTPUT, --output OUTPUT
-                        Arquivo de saída para operações em arquivo único ou junção, ou diretório para múltiplos arquivos.
-  -m MARGINS, --margins MARGINS
-                        Margens para o corte com pdfcrop. Use um valor ou quatro valores para margens separadas.
-  -d DIR, --dir DIR     Diretório onde as imagens serão salvas.
-  -p PAGES, --pages PAGES
-                        Intervalo de páginas para processar ou extrair (ex: '1-3' ou '1').
-  -f FORMAT, --format FORMAT
-                        Formato da imagem de saída (jpeg ou png). Padrão: jpeg.
-  -rt, --remove-text    Remove o texto do PDF antes de cortar margens e converter em imagens.
-  -j, --join            Junta múltiplos PDFs em um único arquivo.
-  --page-counter        Conta o número de páginas dos PDFs e gera relatório em PAGES.txt
-  -et, --extract-text   Extrai texto do PDF removendo hifenizações
-  -w [WATERMARK], --watermark [WATERMARK]
-                        Adiciona marca d'água ao PDF. Use sem valor para 'SECRET' ou especifique o texto desejado.
+# Comprimir com resolução específica
+./edlab-pdfmanager -i input.pdf --shrink 200
+
+# Extrair páginas e converter para imagens
+./edlab-pdfmanager -i input.pdf -p 1-3 -d imagens/
+
+# Remover texto e cortar margens
+./edlab-pdfmanager -i input.pdf -rt -m "10 10 10 10"
+
+# Analisar cores no PDF
+./edlab-pdfmanager -i input.pdf --check-color
+
+# Contar páginas
+./edlab-pdfmanager -i *.pdf --page-counter
 ```
 
+## Argumentos
+
+| Argumento | Descrição |
+|-----------|-----------|
+| `-i, --input` | Arquivo(s) PDF de entrada |
+| `-o, --output` | Arquivo de saída |
+| `-m, --margins` | Margens para corte (ex: "10 10 10 10") |
+| `-d, --dir` | Diretório para salvar imagens |
+| `-p, --pages` | Intervalo de páginas (ex: "1-3") |
+| `-f, --format` | Formato de imagem (jpeg/png) |
+| `-rt, --remove-text` | Remove texto do PDF |
+| `-j, --join` | Junta PDFs |
+| `-w, --watermark` | Adiciona marca d'água |
+| `--shrink` | Comprime PDF (DPI 72-300) |
+| `--check-color` | Analisa cores no PDF |
+| `--convert-to-black` | Converte para preto chapado |
+| `--convert-to-gray` | Converte para escala de cinza |
+| `--extract-to-docx` | Converte para DOCX |
+| `--page-counter` | Conta páginas dos PDFs |
 
 
-## Sobre as margens
+## Desenvolvimento e Testes
 
-Você pode especificar as margens que deseja passar para o pdfcrop usando a opção -m ou --margins.
-As margens podem ser especificadas de duas formas:
-* Um único valor (exemplo: -m 10), que aplica o mesmo valor de margem em todos os lados.
-* Quatro valores separados (exemplo: -m '5 10 5 10'), aplicando valores separados para esquerda, direita, cima e baixo.
+O projeto inclui um Makefile para facilitar o desenvolvimento e testes:
+
+### Comandos do Makefile
+
+```bash
+# Instalar globalmente
+make install
+
+# Executar todos os testes
+make test
+
+# Limpar arquivos gerados
+make clean
+```
+
+### Testes Disponíveis
+
+O Makefile inclui 11 testes que verificam diferentes funcionalidades:
+
+1. Cortar margens, extrair páginas, remover texto e converter para PNG
+2. Juntar PDFs
+3. Testar contador de páginas
+4. Extrair texto
+5. Adicionar marca d'água
+6. Verificar cores
+7. Contar páginas
+8. Comprimir PDF
+9. Converter para preto chapado
+10. Converter para escala de cinza
+11. Converter para DOCX
+
+Para executar um teste específico, você pode verificar o Makefile e rodar o comando manualmente.
+
+[... resto do README anterior ...]
+
+## Estrutura do Projeto
+
+```
+edlab-pdfmanager/
+├── edlab-pdfmanager  # Script principal
+├── Makefile          # Automação de instalação e testes
+├── README.md         # Documentação
+└── tests/            # Arquivos de teste
+    ├── input.pdf
+    └── ...
+```
+
+## Desenvolvimento
+
+Para contribuir com o projeto:
+
+1. Certifique-se de que todos os testes passam: `make test`
+2. Limpe os arquivos de teste antes de commits: `make clean`
+3. Adicione novos testes ao Makefile quando implementar novas funcionalidades
+
+# edlab-pdfmanager
+
+Uma ferramenta de linha de comando para manipulação avançada de arquivos PDF.
 
 
+## Notas
 
-## Makefine
+- Os arquivos processados são salvos com sufixos apropriados (ex: `_compressed`, `_black`, `_gray`)
+- Para junção de PDFs com páginas em branco, use "BLANK" como nome de arquivo
+- A compressão usa Ghostscript com configurações otimizadas
+- A conversão para preto chapado mantém áreas totalmente brancas
 
-`make install`  : para instalar
-`make test` : para testar
-`make clean` : para limpar os testes
- 
+## Requisitos de Sistema
 
- ## Llama
+- Python 3.6+
+- Ghostscript
+- pdfcrop (para corte de margens)
+- Espaço em disco suficiente para processamento de arquivos
 
- llx-tCTgeaDCSaRnQ2NNr3WuOIZXWZ9com03e37bnTBNShiUjQeK
+## Licença
+
+Este projeto é distribuído sob a licença MIT.
