@@ -1,29 +1,31 @@
 #!/usr/bin/env python3
 
+# Bibliotecas padrão
 import argparse
-import subprocess
-import os
 import logging
-from PyPDF2 import PdfReader, PdfWriter
-from pdf2image import convert_from_path
+import os
+import re
+import subprocess
 from datetime import datetime
 from io import StringIO, BytesIO
+
+# Bibliotecas de terceiros
+import fitz
+import numpy as np
+import PIL.Image
+from pdf2image import convert_from_path
 from pdfminer.high_level import extract_text_to_fp
 from pdfminer.layout import LAParams
-from reportlab.pdfgen import canvas
+from PyPDF2 import PdfReader, PdfWriter
 from reportlab.lib.colors import Color
 from reportlab.lib.pagesizes import letter
-import re
-import fitz
-import PIL.Image
+from reportlab.pdfgen import canvas
 from tqdm import tqdm
-import numpy as np
-
 
 # Configuração do logging para depuração
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def analyze_pdf_colors(pdf_path):
+def analyze_pdf_colors(pdf_path: str) -> dict:
     """Analisa cores em um PDF."""
     doc = fitz.open(pdf_path)
     results = {
@@ -211,8 +213,10 @@ def rename_file(old_name, new_name):
     try:
         os.rename(old_name, new_name)
         logging.info(f"Arquivo renomeado de {old_name} para {new_name}")
+        return True
     except OSError as e:
         logging.error(f"Erro ao renomear arquivo: {e}")
+        return False
 
 def copy_file(source, destination):
     """Copia um arquivo mantendo o original."""
@@ -287,18 +291,6 @@ def find_pdf_files(input_paths):
     
     # Remove duplicatas mantendo a ordem
     return list(dict.fromkeys(pdf_files))
-    
-    for input_path in input_paths:
-        if os.path.isdir(input_path):
-            # Se for um diretório, procura todos os PDFs nele
-            pdf_files.extend(sorted(glob.glob(os.path.join(input_path, "*.pdf"))))
-        elif '*' in input_path:
-            # Se contiver wildcard, usa glob diretamente
-            pdf_files.extend(sorted(glob.glob(input_path)))
-        elif os.path.isfile(input_path):
-            # Se for um arquivo único, adiciona se for PDF
-            if input_path.lower().endswith('.pdf'):
-                pdf_files.append(input_path)
     
     # Remove duplicatas mantendo a ordem
     return list(dict.fromkeys(pdf_files))
@@ -676,11 +668,123 @@ def generate_output_filename(input_path, suffix="", ext=None):
     
     return os.path.join(directory, new_name)
 
-# Modifique a função main para incluir a nova opção:
+def process_color_analysis(pdf_files):
+    """Processa a análise de cores dos PDFs."""
+    if not pdf_files:
+        logging.error("Nenhum arquivo PDF válido encontrado para análise de cores")
+        return
+    
+    for pdf_file in pdf_files:
+        try:
+            results = analyze_pdf_colors(pdf_file)
+            print(f"\nAnálise de cores: {pdf_file}")
+            print("-" * 50)
+            print(f"Status: {'Colorido' if results['is_color'] else 'Preto e Branco'}")
+            print("\nDetalhes por página:")
+            for page in results['pages_info']:
+                status = "Colorida" if page['has_color'] else "P&B"
+                print(f"Página {page['number']}: {status} (Cobertura: {page['coverage']:.1f}%)")
+            print(f"\nCobertura total de cor: {results['color_coverage']:.1f}%")
+        except Exception as e:
+            logging.error(f"Erro ao analisar cores em {pdf_file}: {str(e)}")
+
+def process_text_extraction(input_files, output_file):
+    """Processa a extração de texto dos PDFs."""
+    for input_file in [f for f in input_files if f != "BLANK"]:
+        try:
+            extracted_file = extract_text_from_pdf(input_file, output_file)
+            logging.info(f"Texto extraído com sucesso de {input_file} para {extracted_file}")
+        except Exception as e:
+            logging.error(f"Erro ao processar {input_file}: {str(e)}")
+
+def process_page_counting(pdf_files):
+    """Processa a contagem de páginas dos PDFs."""
+    if not pdf_files:
+        logging.error("Nenhum arquivo PDF válido encontrado para contagem")
+        return
+    
+    results = count_pdf_pages(pdf_files)
+    save_page_count_report(results)
+
+def process_pdf_joining(input_files, output_file, watermark_text=None):
+    """Processa a junção de PDFs."""
+    has_blank = any(item == "BLANK" for item in input_files)
+    
+    if has_blank:
+        if not merge_pdfs_with_blanks(input_files, output_file):
+            logging.error("Falha na operação de junção com páginas em branco")
+            return False
+    else:
+        pdf_files = [f for f in input_files if f != "BLANK"]
+        if len(pdf_files) < 2:
+            logging.error("São necessários pelo menos 2 arquivos PDF para juntar")
+            return False
+        
+        if not merge_pdfs(pdf_files, output_file):
+            logging.error("Falha na operação de junção")
+            return False
+    
+    if watermark_text:
+        watermark_output = generate_output_filename(output_file, "watermark")
+        add_watermark(output_file, watermark_output, watermark_text)
+        os.remove(output_file)
+        os.rename(watermark_output, output_file)
+    
+    return True
+
+def process_single_pdf(input_file, args):
+    """Processa operações em um único PDF."""
+    if not args.output:
+        suffix = []
+        if args.pages:
+            suffix.append(f"pages_{args.pages.replace('-', 'to')}")
+        if args.remove_text:
+            suffix.append("notext")
+        if args.margins:
+            suffix.append("cropped")
+        if args.watermark:
+            suffix.append("watermark")
+        
+        suffix_str = "_".join(suffix) if suffix else ""
+        args.output = generate_output_filename(input_file, suffix_str)
+        logging.info(f"Nome do arquivo de saída gerado automaticamente: {args.output}")
+
+    page_range = parse_page_range(args.pages) if args.pages else None
+    
+    temp_pdf = "temp_extracted.pdf"
+    input_pdf = temp_pdf if page_range else input_file
+    
+    if page_range:
+        extract_pages(input_file, temp_pdf, page_range)
+
+    if args.remove_text:
+        delete_text_from_pdf(input_pdf, args.output)
+    else:
+        copy_file(input_pdf, args.output)
+
+    if args.margins:
+        cropped_output = args.output.replace(".pdf", "_cropped.pdf")
+        crop_pdf_with_pdfcrop(args.output, cropped_output, args.margins)
+        os.remove(args.output)
+        rename_file(cropped_output, args.output)
+
+    if args.watermark:
+        watermark_output = generate_output_filename(args.output, "watermark")
+        add_watermark(args.output, watermark_output, args.watermark)
+        os.remove(args.output)
+        rename_file(watermark_output, args.output)
+
+    if page_range and os.path.exists(temp_pdf):
+        os.remove(temp_pdf)
+
+    if args.dir:
+        convert_pdf_to_images(args.output, args.dir, args.format.lower(), page_range)
 
 def main():
+    """Função principal do programa."""
     parser = argparse.ArgumentParser(description="Manipulação de arquivos PDF: juntar, remover texto, cortar margens, extrair páginas, converter para imagens e adicionar marca d'água.")
     
+    # Configuração dos argumentos
     parser.add_argument("-i", "--input", required=True, nargs='+',
                        help="Arquivo(s) PDF de entrada, diretório(s) ou padrões (*.pdf). Use 'BLANK' para inserir páginas em branco quando usando --join")
     parser.add_argument("-o", "--output", 
@@ -706,160 +810,51 @@ def main():
     parser.add_argument("--check-color", action='store_true',
                        help="Analisa se o PDF contém páginas coloridas")
 
-
     args = parser.parse_args()
 
     try:
-        # Encontra todos os arquivos PDF com base nos argumentos de entrada
         input_files = find_pdf_files(args.input)
-        
-        if args.check_color:
-            pdf_files = [f for f in input_files if f != "BLANK"]
-            if not pdf_files:
-                logging.error("Nenhum arquivo PDF válido encontrado para análise de cores")
-                return
-            
-            for pdf_file in pdf_files:
-                try:
-                    results = analyze_pdf_colors(pdf_file)
-                    print(f"\nAnálise de cores: {pdf_file}")
-                    print("-" * 50)
-                    print(f"Status: {'Colorido' if results['is_color'] else 'Preto e Branco'}")
-                    print("\nDetalhes por página:")
-                    for page in results['pages_info']:
-                        status = "Colorida" if page['has_color'] else "P&B"
-                        print(f"Página {page['number']}: {status} (Cobertura: {page['coverage']:.1f}%)")
-                    print(f"\nCobertura total de cor: {results['color_coverage']:.1f}%")
-                except Exception as e:
-                    logging.error(f"Erro ao analisar cores em {pdf_file}: {str(e)}")
-            return
         
         if not input_files:
             logging.error("Nenhum arquivo PDF encontrado")
             return
 
-        # Se a opção --extract-text foi especificada
+        # Processa análise de cores
+        if args.check_color:
+            process_color_analysis([f for f in input_files if f != "BLANK"])
+            return
+
+        # Processa extração de texto
         if args.extract_text:
-            for input_file in [f for f in input_files if f != "BLANK"]:
-                output_file = args.output if args.output else None
-                try:
-                    extracted_file = extract_text_from_pdf(input_file, output_file)
-                    logging.info(f"Texto extraído com sucesso de {input_file} para {extracted_file}")
-                except Exception as e:
-                    logging.error(f"Erro ao processar {input_file}: {str(e)}")
+            process_text_extraction(input_files, args.output)
             return
 
-        # Se a opção --page-counter foi especificada
+        # Processa contagem de páginas
         if args.page_counter:
-            pdf_files = [f for f in input_files if f != "BLANK"]
-            if not pdf_files:
-                logging.error("Nenhum arquivo PDF válido encontrado para contagem")
-                return
-                
-            results = count_pdf_pages(pdf_files)
-            save_page_count_report(results)
+            process_page_counting([f for f in input_files if f != "BLANK"])
             return
-            
-        # Se for junção de PDFs
+
+        # Processa junção de PDFs
         if args.join:
-            has_blank = any(item == "BLANK" for item in input_files)
+            output_file = args.output
+            if not output_file:
+                first_pdf = next((f for f in input_files if f != "BLANK"), None)
+                if not first_pdf:
+                    logging.error("Nenhum arquivo PDF encontrado na sequência")
+                    return
+                output_file = generate_output_filename(first_pdf, "merged")
             
-            if has_blank:
-                if args.output:
-                    output_file = args.output if args.output.lower().endswith('.pdf') else args.output + '.pdf'
-                else:
-                    first_pdf = next((f for f in input_files if f != "BLANK"), None)
-                    if not first_pdf:
-                        logging.error("Nenhum arquivo PDF encontrado na sequência")
-                        return
-                    output_file = generate_output_filename(first_pdf, "merged")
-                
-                if merge_pdfs_with_blanks(input_files, output_file):
-                    logging.info("Operação de junção com páginas em branco concluída com sucesso")
-                else:
-                    logging.error("Falha na operação de junção com páginas em branco")
-            else:
-                pdf_files = [f for f in input_files if f != "BLANK"]
-                if len(pdf_files) < 2:
-                    logging.error("São necessários pelo menos 2 arquivos PDF para juntar")
-                    return
-                
-                if args.output:
-                    output_file = args.output if args.output.lower().endswith('.pdf') else args.output + '.pdf'
-                else:
-                    output_file = generate_output_filename(pdf_files[0], "merged")
-                
-                if merge_pdfs(pdf_files, output_file):
-                    logging.info("Operação de junção concluída com sucesso")
-                else:
-                    logging.error("Falha na operação de junção")
-                    return
-
-            # Adiciona marca d'água ao PDF unificado se especificado
-            if args.watermark:
-                watermark_output = generate_output_filename(output_file, "watermark")
-                add_watermark(output_file, watermark_output, args.watermark)
-                os.remove(output_file)  # Remove o arquivo intermediário
-                os.rename(watermark_output, output_file)
+            output_file = output_file if output_file.lower().endswith('.pdf') else output_file + '.pdf'
+            process_pdf_joining(input_files, output_file, args.watermark)
             return
 
-        # Para operações em arquivo único
+        # Processa PDF único
         input_file = next((f for f in input_files if f != "BLANK"), None)
         if not input_file:
             logging.error("Nenhum arquivo PDF válido encontrado para processamento")
             return
-            
-        # Gera nome do arquivo de saída se não especificado
-        if not args.output:
-            suffix = []
-            if args.pages:
-                suffix.append(f"pages_{args.pages.replace('-', 'to')}")
-            if args.remove_text:
-                suffix.append("notext")
-            if args.margins:
-                suffix.append("cropped")
-            if args.watermark:
-                suffix.append("watermark")
-            
-            suffix_str = "_".join(suffix) if suffix else ""
-            args.output = generate_output_filename(input_file, suffix_str)
-            logging.info(f"Nome do arquivo de saída gerado automaticamente: {args.output}")
-
-        # Processa o arquivo
-        page_range = None
-        if args.pages:
-            page_range = parse_page_range(args.pages)
-
-        temp_pdf = "temp_extracted.pdf"
-        if page_range:
-            extract_pages(input_file, temp_pdf, page_range)
-            input_pdf = temp_pdf
-        else:
-            input_pdf = input_file
-
-        if args.remove_text:
-            delete_text_from_pdf(input_pdf, args.output)
-        else:
-            copy_file(input_pdf, args.output)
-
-        if args.margins:
-            cropped_output = args.output.replace(".pdf", "_cropped.pdf")
-            crop_pdf_with_pdfcrop(args.output, cropped_output, args.margins)
-            os.remove(args.output)
-            rename_file(cropped_output, args.output)
-
-        # Adiciona marca d'água se especificado
-        if args.watermark:
-            watermark_output = generate_output_filename(args.output, "watermark")
-            add_watermark(args.output, watermark_output, args.watermark)
-            os.remove(args.output)
-            rename_file(watermark_output, args.output)
-
-        if page_range and os.path.exists(temp_pdf):
-            os.remove(temp_pdf)
-
-        if args.dir:
-            convert_pdf_to_images(args.output, args.dir, args.format.lower(), page_range)
+        
+        process_single_pdf(input_file, args)
 
     except Exception as e:
         logging.error(f"Erro durante o processamento: {str(e)}")
