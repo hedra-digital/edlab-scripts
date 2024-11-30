@@ -18,17 +18,22 @@ sudo apt-get install -y \
     python3-venv \
     poppler-utils
 
+```
+
+#### Arch Linux
+```bash
+yay -S ghostscript pdftk pdfcrop python-pypdf2 python-pdf2image python-pdfminer.six python-reportlab python-tqdm python-fitz python-pillow python-pdf2docx
+```
+
+#### Instalação de uma máquina virtual
+
+```
 # Criar e ativar ambiente virtual (opcional, mas recomendado)
 python3 -m venv venv
 source venv/bin/activate
 
 # Instalar dependências Python
 pip install PyPDF2 pdf2image pdfminer.six reportlab tqdm PyMuPDF Pillow pdf2docx
-```
-
-#### Arch Linux
-```bash
-yay -S ghostscript pdftk pdfcrop python-pypdf2 python-pdf2image python-pdfminer.six python-reportlab python-tqdm python-fitz python-pillow python-pdf2docx
 ```
 
 ### Instalação do edlab-pdfmanager
