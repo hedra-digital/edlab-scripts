@@ -15,6 +15,8 @@ test:
 	./edlab-pdfmanager -i inputB.pdf --check-color
 	echo "=== TESTE 7: contas as páginas =================================================="
 	./edlab-pdfmanager -i inputB.pdf --page-counter
+	echo "=== TESTE 8: shrink ========== =================================================="
+	./edlab-pdfmanager -i inputB.pdf --shrink
 
 
 clean:
@@ -26,4 +28,4 @@ clean:
 	-rm img2 -rf
 	-rm img3 -rf
 	-rm PAGES.txt 
-	-rm *pages* *merge* *extracted_* log.txt output* *_watermark*
+	-rm *pages* *merge* *extracted_* log.txt output* *_watermark* *compressed* *modified*

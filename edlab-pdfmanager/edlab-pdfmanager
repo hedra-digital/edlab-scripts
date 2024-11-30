@@ -25,6 +25,64 @@ from tqdm import tqdm
 # Configuração do logging para depuração
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+def process_pdf_shrinking(pdf_files, resolution=150):
+    """
+    Processa a compressão de um ou mais arquivos PDF.
+    
+    Args:
+        pdf_files (list): Lista de caminhos dos arquivos PDF
+        resolution (int): Resolução das imagens em DPI
+    """
+    if not pdf_files:
+        logging.error("Nenhum arquivo PDF válido encontrado para compressão")
+        return
+        
+    for input_file in pdf_files:
+        try:
+            output_file = generate_output_filename(input_file, "compressed")
+            
+            gs_command = [
+                'gs',
+                '-sDEVICE=pdfwrite',
+                '-dCompatibilityLevel=1.4',
+                '-dPDFSETTINGS=/printer',
+                '-dNOPAUSE',
+                '-dQUIET',
+                '-dBATCH',
+                '-dColorImageDownsampleType=/Bicubic',
+                f'-dColorImageResolution={resolution}',
+                '-dGrayImageDownsampleType=/Bicubic',
+                f'-dGrayImageResolution={resolution}',
+                '-dMonoImageDownsampleType=/Bicubic',
+                f'-dMonoImageResolution={resolution}',
+                f'-sOutputFile={output_file}',
+                input_file
+            ]
+
+            logging.info(f"Comprimindo arquivo: {input_file}")
+            result = subprocess.run(gs_command, capture_output=True, text=True)
+            
+            # Processa warnings relevantes
+            for line in result.stderr.split('\n'):
+                if line and not "Object streams" in line and not "XRef stream" in line:
+                    logging.warning(line)
+
+            # Calcula e mostra a redução alcançada
+            original_size = os.path.getsize(input_file)
+            compressed_size = os.path.getsize(output_file)
+            reduction = (1 - compressed_size/original_size) * 100
+
+            logging.info(f"\nCompressão concluída para: {input_file}")
+            logging.info(f"Arquivo comprimido salvo como: {output_file}")
+            logging.info(f"Tamanho original: {original_size/1024:.2f} KB")
+            logging.info(f"Tamanho comprimido: {compressed_size/1024:.2f} KB")
+            logging.info(f"Redução alcançada: {reduction:.1f}%")
+            
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Erro ao executar Ghostscript em {input_file}: {str(e)}")
+        except Exception as e:
+            logging.error(f"Erro ao processar o arquivo {input_file}: {str(e)}")
+
 def analyze_pdf_colors(pdf_path: str) -> dict:
     """Analisa cores em um PDF."""
     doc = fitz.open(pdf_path)
@@ -810,6 +868,9 @@ def main():
     parser.add_argument("--check-color", action='store_true',
                        help="Analisa se o PDF contém páginas coloridas")
 
+    parser.add_argument("--shrink", type=int, nargs='?', const=150, default=None,
+                      help='Comprime PDFs usando a resolução especificada em DPI (72-300, padrão: 150)')
+
     args = parser.parse_args()
 
     try:
@@ -819,14 +880,18 @@ def main():
             logging.error("Nenhum arquivo PDF encontrado")
             return
 
-        # Processa análise de cores
-        if args.check_color:
-            process_color_analysis([f for f in input_files if f != "BLANK"])
+        # Validação da resolução de compressão
+        if args.shrink is not None:
+            if args.shrink < 72 or args.shrink > 300:
+                logging.error("Erro: A resolução deve estar entre 72 e 300 DPI")
+                return
+            # Processa compressão
+            process_pdf_shrinking([f for f in input_files if f != "BLANK"], args.shrink)
             return
 
-        # Processa extração de texto
-        if args.extract_text:
-            process_text_extraction(input_files, args.output)
+        # Resto do código existente...
+        if args.check_color:
+            process_color_analysis([f for f in input_files if f != "BLANK"])
             return
 
         # Processa contagem de páginas
