@@ -12,7 +12,7 @@ from io import StringIO, BytesIO
 # Bibliotecas de terceiros
 import fitz
 import numpy as np
-import PIL.Image
+from PIL import Image
 from pdf2image import convert_from_path
 from pdfminer.high_level import extract_text_to_fp
 from pdfminer.layout import LAParams
@@ -24,6 +24,99 @@ from tqdm import tqdm
 
 # Configuração do logging para depuração
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def process_pdf_to_black(pdf_files):
+    """
+    Converte PDFs para preto chapado.
+    """
+    if not pdf_files:
+        logging.error("Nenhum arquivo PDF válido encontrado para conversão")
+        return
+
+    with tqdm(total=len(pdf_files), desc="Arquivos processados") as file_pbar:
+        for input_file in pdf_files:
+            try:
+                output_file = generate_output_filename(input_file, "black")
+                file_pbar.write(f"\nProcessando: {os.path.basename(input_file)}")
+
+                # Converte o PDF em uma lista de imagens
+                pages = convert_from_path(input_file)
+                
+                # Barra de progresso para as páginas
+                with tqdm(total=len(pages), desc="Convertendo páginas", position=1, leave=False) as page_pbar:
+                    solid_black_pages = []
+                    for page in pages:
+                        # Converte para array numpy para manipulação
+                        img_array = np.array(page)
+                        
+                        # Identifica pixels brancos
+                        white_pixels = np.all(img_array == [255, 255, 255], axis=-1)
+                        
+                        # Cria imagem em preto e branco
+                        solid_black = np.zeros_like(img_array[..., 0], dtype=np.uint8)
+                        solid_black[white_pixels] = 255
+                        
+                        # Converte para imagem PIL e modo binário
+                        solid_black_img = Image.fromarray(solid_black)
+                        solid_black_img = solid_black_img.convert('1')
+                        
+                        solid_black_pages.append(solid_black_img)
+                        page_pbar.update(1)
+                
+                # Salva o PDF
+                solid_black_pages[0].save(
+                    output_file,
+                    'PDF',
+                    save_all=True,
+                    append_images=solid_black_pages[1:],
+                    resolution=300.0
+                )
+                
+                file_pbar.write(f"✓ Concluído: {os.path.basename(output_file)}\n")
+                file_pbar.update(1)
+                
+            except Exception as e:
+                file_pbar.write(f"Erro ao processar {input_file}: {str(e)}")
+
+def process_pdf_to_gray(pdf_files):
+    """
+    Converte PDFs para escala de cinza.
+    """
+    if not pdf_files:
+        logging.error("Nenhum arquivo PDF válido encontrado para conversão")
+        return
+
+    with tqdm(total=len(pdf_files), desc="Arquivos processados") as file_pbar:
+        for input_file in pdf_files:
+            try:
+                output_file = generate_output_filename(input_file, "gray")
+                file_pbar.write(f"\nProcessando: {os.path.basename(input_file)}")
+
+                # Converte o PDF em uma lista de imagens
+                pages = convert_from_path(input_file)
+                
+                # Barra de progresso para as páginas
+                with tqdm(total=len(pages), desc="Convertendo páginas", position=1, leave=False) as page_pbar:
+                    gray_pages = []
+                    for page in pages:
+                        # Converte para escala de cinza
+                        gray_page = page.convert('L')
+                        gray_pages.append(gray_page)
+                        page_pbar.update(1)
+                
+                # Salva o PDF
+                gray_pages[0].save(
+                    output_file,
+                    'PDF',
+                    save_all=True,
+                    append_images=gray_pages[1:]
+                )
+                
+                file_pbar.write(f"✓ Concluído: {os.path.basename(output_file)}\n")
+                file_pbar.update(1)
+                
+            except Exception as e:
+                file_pbar.write(f"Erro ao processar {input_file}: {str(e)}")
 
 def process_pdf_shrinking(pdf_files, resolution=150):
     """
@@ -867,43 +960,57 @@ def main():
                        help="Adiciona marca d'água ao PDF. Use sem valor para 'SECRET' ou especifique o texto desejado.")
     parser.add_argument("--check-color", action='store_true',
                        help="Analisa se o PDF contém páginas coloridas")
-
     parser.add_argument("--shrink", type=int, nargs='?', const=150, default=None,
                       help='Comprime PDFs usando a resolução especificada em DPI (72-300, padrão: 150)')
+    parser.add_argument("--convert-to-black", action='store_true',
+                       help="Converte PDF para preto chapado (mantendo áreas brancas)")
+    parser.add_argument("--convert-to-gray", action='store_true',
+                       help="Converte PDF para escala de cinza")
 
     args = parser.parse_args()
 
     try:
+        # Encontra todos os arquivos PDF baseado nos argumentos de entrada
         input_files = find_pdf_files(args.input)
         
         if not input_files:
             logging.error("Nenhum arquivo PDF encontrado")
             return
 
-        # Validação da resolução de compressão
+        # Lista de arquivos PDF válidos (excluindo BLANKs)
+        valid_pdfs = [f for f in input_files if f != "BLANK"]
+        
+        # 1. Processamentos de conversão de cores
+        if args.convert_to_black:
+            process_pdf_to_black(valid_pdfs)
+            return
+            
+        if args.convert_to_gray:
+            process_pdf_to_gray(valid_pdfs)
+            return
+        
+        # 2. Processamento de compressão
         if args.shrink is not None:
             if args.shrink < 72 or args.shrink > 300:
                 logging.error("Erro: A resolução deve estar entre 72 e 300 DPI")
                 return
-            # Processa compressão
-            process_pdf_shrinking([f for f in input_files if f != "BLANK"], args.shrink)
+            process_pdf_shrinking(valid_pdfs, args.shrink)
             return
-
-        # Resto do código existente...
+        
+        # 3. Análises e extrações
         if args.check_color:
-            process_color_analysis([f for f in input_files if f != "BLANK"])
+            process_color_analysis(valid_pdfs)
             return
-
-        # Processa contagem de páginas
+            
         if args.page_counter:
-            process_page_counting([f for f in input_files if f != "BLANK"])
+            process_page_counting(valid_pdfs)
             return
-
-        # Processa junção de PDFs
+        
+        # 4. Processamento de múltiplos arquivos
         if args.join:
             output_file = args.output
             if not output_file:
-                first_pdf = next((f for f in input_files if f != "BLANK"), None)
+                first_pdf = next((f for f in valid_pdfs), None)
                 if not first_pdf:
                     logging.error("Nenhum arquivo PDF encontrado na sequência")
                     return
@@ -912,9 +1019,9 @@ def main():
             output_file = output_file if output_file.lower().endswith('.pdf') else output_file + '.pdf'
             process_pdf_joining(input_files, output_file, args.watermark)
             return
-
-        # Processa PDF único
-        input_file = next((f for f in input_files if f != "BLANK"), None)
+        
+        # 5. Processamento de arquivo único
+        input_file = next((f for f in valid_pdfs), None)
         if not input_file:
             logging.error("Nenhum arquivo PDF válido encontrado para processamento")
             return
