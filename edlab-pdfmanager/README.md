@@ -4,8 +4,6 @@ Uma ferramenta de linha de comando para manipulação avançada de arquivos PDF.
 
 ## Instalação
 
-### Dependências
-
 ## Requisitos de Sistema
 
 - Python 3.6+
@@ -13,12 +11,20 @@ Uma ferramenta de linha de comando para manipulação avançada de arquivos PDF.
 - pdfcrop (para corte de margens)
 - Espaço em disco suficiente para processamento de arquivos
 
-#### Ubuntu/Debian
+### Ubuntu/Debian
 ```bash
-
 sudo apt update
-sudo apt install ghostscript pdftk python3-pypdf2 python3-pdfminer.six python3-reportlab python3-tqdm python3-pil python3-fitz python3-pdf2docx
+sudo apt install ghostscript pdftk texlive-extra-utils poppler-utils python3-pypdf2 python3-pdfminer.six python3-reportlab python3-tqdm python3-pil python3-fitz python3-pdf2docx
+```
 
+### Arch Linux/Manjaro
+```bash
+yay -S ghostscript pdftk pdfcrop python-pypdf2 python-pdf2image python-pdfminer.six python-reportlab python-tqdm python-fitz python-pillow python-pdf2docx
+```
+
+### Instalação de uma máquina virtual
+
+```
 # Instalar também dependências do sistema
 sudo apt-get update
 sudo apt-get install -y \
@@ -27,16 +33,7 @@ sudo apt-get install -y \
     texlive-extra-utils \
     python3-pip \
     poppler-utils
-```
 
-#### Arch Linux
-```bash
-yay -S ghostscript pdftk pdfcrop python-pypdf2 python-pdf2image python-pdfminer.six python-reportlab python-tqdm python-fitz python-pillow python-pdf2docx
-```
-
-#### Instalação de uma máquina virtual
-
-```
 # Criar e ativar ambiente virtual (opcional, mas recomendado)
 python3 -m venv venv
 source venv/bin/activate
