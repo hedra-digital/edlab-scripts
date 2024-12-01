@@ -13,6 +13,7 @@ from pdf2docx import Converter
 # Bibliotecas de terceiros
 import fitz
 import numpy as np
+import PIL.Image
 from PIL import Image
 from pdf2image import convert_from_path
 from pdfminer.high_level import extract_text_to_fp
@@ -983,10 +984,10 @@ def main():
                        help="Margens para o corte com pdfcrop. Use um valor ou quatro valores para margens separadas.")
     parser.add_argument("-d", "--dir", 
                        help="Diretório onde as imagens serão salvas.")
+    parser.add_argument("-f", "--format", default="jpeg",
+                       help="Para ser usado com -d. Define o formato da imagem de saída (jpeg ou png). Padrão: jpeg.")
     parser.add_argument("-p", "--pages", 
                        help="Intervalo de páginas para processar ou extrair (ex: '1-3' ou '1').")
-    parser.add_argument("-f", "--format", default="jpeg",
-                       help="Formato da imagem de saída (jpeg ou png). Padrão: jpeg.")
     parser.add_argument("-rt", "--remove-text", action='store_true',
                        help="Remove o texto do PDF antes de cortar margens e converter em imagens.")
     parser.add_argument("-j", "--join", action='store_true',
@@ -994,19 +995,19 @@ def main():
     parser.add_argument("--page-counter", action='store_true',
                        help="Conta o número de páginas dos PDFs e gera relatório em PAGES.txt")
     parser.add_argument("-et", "--extract-text", action='store_true',
-                       help="Extrai texto do PDF removendo hifenizações")
-    parser.add_argument("-w", "--watermark", nargs='?', const='SECRET', 
-                       help="Adiciona marca d'água ao PDF. Use sem valor para 'SECRET' ou especifique o texto desejado.")
+                       help="Extrai texto do PDF para um arquivo txt, removendo hifenizações.")
+    parser.add_argument("--extract-to-docx", action='store_true',
+                       help="Converte PDF para formato DOCX, preservando itálicos.")
+    parser.add_argument("-w", "--watermark", nargs='?', const='WATERMARK', 
+                       help="Adiciona marca d'água ao PDF. Use sem valor para 'WATERMARK' ou especifique o texto desejado.")
     parser.add_argument("--check-color", action='store_true',
                        help="Analisa se o PDF contém páginas coloridas")
     parser.add_argument("--shrink", type=int, nargs='?', const=150, default=None,
                       help='Comprime PDFs usando a resolução especificada em DPI (72-300, padrão: 150)')
-    parser.add_argument("--convert-to-black", action='store_true',
-                       help="Converte PDF para preto chapado (mantendo áreas brancas)")
     parser.add_argument("--convert-to-gray", action='store_true',
-                       help="Converte PDF para escala de cinza")
-    parser.add_argument("--extract-to-docx", action='store_true',
-                       help="Converte PDF para formato DOCX")
+                       help="Converte PDF para escala de cinza. Curvas serão convertidas em imagem.")
+    parser.add_argument("--convert-to-black", action='store_true',
+                       help="Converte PDF para preto chapado. Curvas serão convertidas em imagem.")
 
     args = parser.parse_args()
 
