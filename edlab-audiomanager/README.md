@@ -38,7 +38,7 @@ sudo pacman -S protobuf
 
 ### Comando básico:
 ```bash
-./edlab-audio-editor.py -i arquivo.wav --transcript
+edlab-audiomanager -i arquivo.mp3 --transcript
 ```
 
 ### Opções disponíveis:
@@ -53,27 +53,27 @@ sudo pacman -S protobuf
 
 1. Transcrever um único arquivo:
 ```bash
-./edlab-audio-editor.py -i audio.wav --transcript
+edlab-audiomanager -i audio.mp3 --transcript
 ```
 
 2. Transcrever com arquivo de saída específico:
 ```bash
-./edlab-audio-editor.py -i audio.wav --transcript -o transcricao.txt
+edlab-audiomanager -i audio.mp3 --transcript -o transcricao.txt
 ```
 
 3. Processar todos os arquivos WAV em um diretório:
 ```bash
-./edlab-audio-editor.py -i . --transcript
+edlab-audiomanager -i . --transcript
 ```
 
 4. Processar apenas arquivos WAV específicos:
 ```bash
-./edlab-audio-editor.py -i "*.wav" --transcript
+edlab-audiomanager -i "*.mp3" --transcript
 ```
 
 5. Usar modelo mais rápido com processamento paralelo:
 ```bash
-./edlab-audio-editor.py -i "*.wav" --model tiny --transcript
+edlab-audiomanager -i "*.mp3" --model tiny --transcript
 ```
 
 ## Modelos Disponíveis
