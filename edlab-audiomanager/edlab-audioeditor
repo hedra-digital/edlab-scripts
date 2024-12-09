@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import glob
+import whisper
+from datetime import timedelta
+from pathlib import Path
+from tqdm import tqdm
+import torch
+import warnings
+
+# Suprimir avisos
+warnings.filterwarnings("ignore")
+
+class AudioProcessor:
+    def __init__(self, model_name="base"):
+        print(f"Carregando modelo {model_name}...")
+        self.whisper_model = whisper.load_model(model_name)
+        print("Modelo carregado!")
+
+    def process_file(self, input_file, output_file=None):
+        if not os.path.exists(input_file):
+            print(f"Erro: Arquivo não encontrado - {input_file}")
+            return False
+        
+        if output_file is None:
+            output_file = Path(input_file).stem + "_transcription.txt"
+        
+        try:
+            print(f"\nTranscrevendo: {input_file}")
+            result = self.whisper_model.transcribe(input_file, language="pt")
+            
+            # Salvar com barra de progresso
+            segments = result["segments"]
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(f"TRANSCRIÇÃO: {Path(input_file).stem}\n")
+                f.write("=" * 50 + "\n\n")
+                
+                for segment in tqdm(segments, desc="Processando"):
+                    timestamp = f"[{str(timedelta(seconds=int(segment['start'])))} -> {str(timedelta(seconds=int(segment['end'])))}]"
+                    f.write(f"{timestamp}:\n{segment['text'].strip()}\n\n")
+            
+            print(f"✓ Concluído: {output_file}")
+            return True
+            
+        except Exception as e:
+            print(f"Erro ao processar {input_file}: {str(e)}")
+            return False
+
+def main():
+    parser = argparse.ArgumentParser(description='Conversor e transcritor de áudio')
+    parser.add_argument('-i', '--input', required=True,
+                      help='Arquivo de entrada ou diretório')
+    parser.add_argument('-o', '--output', 
+                      help='Arquivo de saída (opcional)')
+    parser.add_argument('--transcript', action='store_true',
+                      help='Realizar transcrição do áudio')
+    parser.add_argument('--model', choices=['tiny', 'base', 'small', 'medium', 'large'],
+                      default='base',
+                      help='Modelo Whisper a ser usado (padrão: base)')
+    
+    args = parser.parse_args()
+    
+    # Inicializar processador
+    processor = AudioProcessor(model_name=args.model)
+    
+    # Processar arquivos
+    if os.path.isdir(args.input):
+        audio_files = glob.glob(os.path.join(args.input, "*.wav")) + \
+                     glob.glob(os.path.join(args.input, "*.mp3"))
+        print(f"Encontrados {len(audio_files)} arquivos")
+        for audio_file in tqdm(audio_files, desc="Processando arquivos"):
+            processor.process_file(audio_file)
+    
+    elif '*' in args.input:
+        audio_files = glob.glob(args.input)
+        print(f"Encontrados {len(audio_files)} arquivos")
+        for audio_file in tqdm(audio_files, desc="Processando arquivos"):
+            processor.process_file(audio_file)
+    
+    else:
+        processor.process_file(args.input, args.output)
+
+if __name__ == "__main__":
+    main()
