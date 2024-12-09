@@ -47,7 +47,6 @@ sudo pacman -S protobuf
 -o, --output    : Arquivo de saída (opcional)
 --transcript    : Realizar transcrição do áudio
 --model        : Escolher modelo Whisper (tiny, base, small, medium, large)
---workers      : Número de workers para processamento paralelo
 ```
 
 ### Exemplos de uso:
@@ -74,7 +73,7 @@ sudo pacman -S protobuf
 
 5. Usar modelo mais rápido com processamento paralelo:
 ```bash
-./edlab-audio-editor.py -i "*.wav" --model tiny --workers 4 --transcript
+./edlab-audio-editor.py -i "*.wav" --model tiny --transcript
 ```
 
 ## Modelos Disponíveis
