@@ -20,6 +20,9 @@ sudo apt install ghostscript pdftk texlive-extra-utils poppler-utils python3-pyp
 ### Arch Linux/Manjaro
 ```bash
 yay -S ghostscript pdftk pdfcrop python-pypdf2 python-pdf2image python-pdfminer.six python-reportlab python-tqdm python-fitz python-pillow python-pdf2docx
+sudo pacman -S protobuf
+sudo pacman -S opencv
+sudo pacman -S openexr
 ```
 
 ### Instalação de uma máquina virtual
