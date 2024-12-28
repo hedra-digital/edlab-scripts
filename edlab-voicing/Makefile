@@ -2,6 +2,7 @@
 PYTHON := python3
 VENV := venv
 BIN := $(VENV)/bin
+PIPX := pipx
 
 # Alvos padrão
 .PHONY: all
@@ -17,21 +18,28 @@ $(VENV):
 deps: $(VENV)
 	$(BIN)/pip install -r requirements.txt
 
+# Preparar diretórios
+.PHONY: prepare
+prepare:
+	mkdir -p src/voicing.egg-info
+	chmod -R 777 src/voicing.egg-info
+
 # Instalar globalmente
 .PHONY: install
-install: deps
-	sudo $(BIN)/pip install -e .
+install: deps prepare
+	$(PIPX) install -e . --force
 
 # Desinstalar
 .PHONY: uninstall
 uninstall:
-	sudo pip uninstall -y voicing
+	$(PIPX) uninstall voicing || true
 
 # Limpar arquivos temporários
 .PHONY: clean
 clean:
 	rm -rf $(VENV)
 	rm -rf *.egg-info
+	rm -rf src/*.egg-info
 	rm -rf build/
 	rm -rf dist/
 	find . -type d -name __pycache__ -exec rm -rf {} +

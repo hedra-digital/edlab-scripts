@@ -1,0 +1,10 @@
+README.md
+setup.py
+src/voicing/__init__.py
+src/voicing/voicing.py
+src/voicing.egg-info/PKG-INFO
+src/voicing.egg-info/SOURCES.txt
+src/voicing.egg-info/dependency_links.txt
+src/voicing.egg-info/entry_points.txt
+src/voicing.egg-info/requires.txt
+src/voicing.egg-info/top_level.txt

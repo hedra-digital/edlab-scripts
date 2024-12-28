@@ -1,0 +1,4 @@
+azure-cognitiveservices-speech
+edge-tts
+gtts
+tqdm
