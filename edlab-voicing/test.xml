@@ -1,0 +1,13 @@
+<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-BR">
+        <prosody rate="-15%" pitch="-10Hz">
+            Era uma vez, em uma terra muito distante,
+            <break time="500ms"/>
+            um pequeno reino onde a magia ainda existia.
+            <break time="1s"/>
+            <emphasis level="strong">
+                Os habitantes deste reino tinham um segredo especial:
+            </emphasis>
+            <break time="500ms"/>
+            eles podiam falar com as estrelas.
+        </prosody>
+</speak>

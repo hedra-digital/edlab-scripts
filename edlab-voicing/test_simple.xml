@@ -1,0 +1,10 @@
+<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-BR">
+        <prosody>
+            Era uma vez, em uma terra muito distante,
+            um pequeno reino onde a magia ainda existia.
+            <emphasis level="strong">
+                Os habitantes deste reino tinham um segredo especial:
+            </emphasis>
+            eles podiam falar com as estrelas.
+        </prosody>
+</speak>
