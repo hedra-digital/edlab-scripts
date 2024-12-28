@@ -203,7 +203,20 @@ def list_presets():
         for key, value in config.items():
             print(f"  {key}: {value}")
 
-if __name__ == "__main__":
+
+
+#!/usr/bin/env python3
+# Seu código atual aqui, mas com algumas modificações:
+
+
+def main():
+    """
+    Função principal que será chamada quando o comando 'voicing' for executado.
+    Esta função gerencia o fluxo principal do programa, incluindo:
+    - Processamento de argumentos da linha de comando
+    - Verificação de condições necessárias
+    - Execução da conversão de texto para fala
+    """
     parser = argparse.ArgumentParser(description='Converter texto em áudio')
     parser.add_argument('-i', '--input', help='Arquivo de entrada (markdown ou txt)')
     parser.add_argument('--text', help='Texto para converter em áudio')
@@ -228,19 +241,21 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
+    # Executa os comandos de listagem se solicitados
     if args.list_voices:
-        asyncio.run(list_voices())
+        return asyncio.run(list_voices())
     elif args.list_presets:
-        list_presets()
-    else:
-        if not args.text and not args.input:
-            parser.error("É necessário fornecer --text ou -i (arquivo de entrada)")
-            
-        if args.input:
-            text = read_text_file(args.input)
-        else:
-            text = args.text
-            
+        return list_presets()
+    
+    # Verifica se foi fornecido texto ou arquivo de entrada
+    if not args.text and not args.input:
+        parser.error("É necessário fornecer --text ou -i (arquivo de entrada)")
+    
+    # Obtém o texto da entrada apropriada
+    text = read_text_file(args.input) if args.input else args.text
+    
+    # Executa a conversão de texto para fala
+    try:
         asyncio.run(convert_to_speech(
             text,
             args.output,
@@ -252,3 +267,17 @@ if __name__ == "__main__":
             args.preset,
             args.pause
         ))
+        print(f"\nAúdio gerado com sucesso: {args.output}")
+    except Exception as e:
+        print(f"\nErro durante a conversão: {str(e)}")
+        return 1
+    
+    return 0
+
+if __name__ == "__main__":
+    """
+    Ponto de entrada do script quando executado diretamente.
+    Chama a função main() e gerencia o código de saída do programa.
+    """
+    exit_code = main()
+    exit(exit_code)

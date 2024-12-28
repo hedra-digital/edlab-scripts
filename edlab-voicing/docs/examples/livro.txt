@@ -1,0 +1,10 @@
+Capítulo 1: O Início de Tudo
+
+<emphasis level='strong'>Ninguém imaginava</emphasis> que aquela manhã seria diferente.
+O sol nascia como sempre, tingindo o céu de rosa e dourado.
+Maria observava pela janela, segurando sua xícara de café.
+Era dia <say-as interpret-as='date' format='dmy'>15/04/2024</say-as>, uma data que ela nunca esqueceria.
+
+A <sub alias='O N U'>ONU</sub> havia acabado de anunciar a descoberta.
+Pela primeira vez na história, tínhamos provas concretas.
+Não estávamos sozinhos no universo.
