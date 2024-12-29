@@ -1,0 +1,17 @@
+[
+  {
+    "name": "asterisks",
+    "pattern": "\\*([^\\*]+)\\*",
+    "replacement": "\\1"
+  },
+  {
+    "name": "quotes",
+    "pattern": "\"([^\"]+)\"",
+    "replacement": "<break time=\"250ms\"/><emphasis level=\"strong\">abre aspas</emphasis><break time=\"250ms\"/> \\1 <break time=\"250ms\"/><emphasis level=\"strong\">fecha aspas</emphasis><break time=\"250ms\"/>"
+  },
+  {
+    "name": "emphasis",
+    "pattern": "_([^_]+)_",
+    "replacement": "\\1"
+  }
+]

@@ -6,6 +6,7 @@ import os
 from tqdm import tqdm
 import re
 import azure.cognitiveservices.speech as speechsdk
+from pattern_manager import process_text_with_patterns
 
 # Configurações do Azure Speech Service
 AZURE_SPEECH_KEY = "25lM4tmGc07aXoUcE99p99DcJzGAAj8HKZAKyUUG2c1jXk0tgVMKJQQJ99ALACZoyfiXJ3w3AAAYACOGm24o"
@@ -78,10 +79,14 @@ def azure_tts_convert(text, voice, output_file, pitch="0", rate="0", style="gene
     Converte texto em fala usando Azure Speech Service.
     Aceita tanto texto simples quanto SSML.
     """
-    speech_config = speechsdk.SpeechConfig(
-        subscription=AZURE_SPEECH_KEY,
-        region=AZURE_SPEECH_REGION
-    )
+    try:
+        speech_config = speechsdk.SpeechConfig(
+            subscription=AZURE_SPEECH_KEY,
+            region=AZURE_SPEECH_REGION
+        )
+    except speechsdk.exceptions.SpeechException as e:
+        print(f"Erro de conexão com o Azure: {str(e)}")
+        return False
     
     audio_config = speechsdk.audio.AudioOutputConfig(filename=output_file)
     synthesizer = speechsdk.SpeechSynthesizer(
@@ -118,9 +123,12 @@ def azure_tts_convert(text, voice, output_file, pitch="0", rate="0", style="gene
         else:
             print(f"Erro na síntese: {result.reason}")
             if result.reason == speechsdk.ResultReason.Canceled:
-                details = speechsdk.CancellationDetails(result)
-                print(f"Detalhes do erro: {details.error_details}")
+                details = result.cancellation_details
+                print(f"Detalhes do erro: {details.reason}")
             return False
+    except speechsdk.SpeechSynthesisException as e:
+        print(f"Erro de síntese de fala: {str(e)}")
+        return False
     except Exception as e:
         print(f"Erro durante a síntese: {str(e)}")
         return False
@@ -152,22 +160,27 @@ async def convert_to_speech(text, output_file, engine, language, voice, pitch, r
         style = config.get('style', 'general')
         print(f"Usando preset '{preset}' com estilo '{style}'")
 
-    # Só processa pausas se o texto não for SSML
+    # Só processa padrões e pausas se o texto não for SSML
     is_ssml = text.strip().startswith('<speak')
-    if pause_size > 0 and not is_ssml:
-        pause_ms = pause_size * 100
-        parts = re.split(r'([.!?:;])', text)
-        processed_text = ""
+    if not is_ssml:
+        # Aplica os padrões de substituição
+        text = process_text_with_patterns(text)
         
-        for i in range(0, len(parts)-1, 2):
-            if parts[i].strip():
-                sentence = parts[i].strip() + parts[i+1]
-                processed_text += f"{sentence} <break time='{pause_ms}ms'/> "
-        
-        if len(parts) % 2 == 1 and parts[-1].strip():
-            processed_text += parts[-1].strip()
-        
-        text = processed_text.strip()
+        # Processa pausas se necessário
+        if pause_size > 0:
+            pause_ms = pause_size * 100
+            parts = re.split(r'([.!?:;])', text)
+            processed_text = ""
+            
+            for i in range(0, len(parts)-1, 2):
+                if parts[i].strip():
+                    sentence = parts[i].strip() + parts[i+1]
+                    processed_text += f"{sentence} <break time='{pause_ms}ms'/> "
+            
+            if len(parts) % 2 == 1 and parts[-1].strip():
+                processed_text += parts[-1].strip()
+            
+            text = processed_text.strip()
     
     with tqdm(total=1, desc="Convertendo", unit="arquivo") as pbar:
         try:
@@ -269,9 +282,14 @@ def main():
         ))
         print(f"\nAúdio gerado com sucesso: {args.output}")
     except Exception as e:
-        print(f"\nErro durante a conversão: {str(e)}")
+        error_message = f"Erro durante a conversão: {str(e)}"
+        if "AZURE_SPEECH_KEY" in str(e):
+            error_message += "\nVerifique se a chave do Azure Speech está correta."
+        elif "AZURE_SPEECH_REGION" in str(e):
+            error_message += "\nVerifique se a região do Azure Speech está correta."
+        print(error_message)
         return 1
-    
+
     return 0
 
 if __name__ == "__main__":
