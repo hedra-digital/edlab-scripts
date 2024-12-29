@@ -1,6 +1,7 @@
 README.md
 setup.py
 src/voicing/__init__.py
+src/voicing/pattern_manager.py
 src/voicing/voicing.py
 src/voicing.egg-info/PKG-INFO
 src/voicing.egg-info/SOURCES.txt
