@@ -47,6 +47,38 @@ PRESETS = {
     }
 }
 
+
+def process_line_breaks(text):
+    """
+    Processa quebras de linha no texto, mantendo apenas quebras entre parágrafos.
+    Remove quebras de linha dentro de parágrafos e mantém a formatação entre parágrafos.
+    
+    Args:
+        text (str): Texto a ser processado
+        
+    Returns:
+        str: Texto processado com quebras de linha ajustadas
+    """
+    # Primeiro, normaliza as quebras de linha para \n
+    text = text.replace('\r\n', '\n')
+    
+    # Remove espaços extras no final das linhas
+    text = re.sub(r'\s+$', '', text, flags=re.MULTILINE)
+    
+    # Substitui quebras de linha simples por espaços
+    text = re.sub(r'\n(?!\n)', ' ', text)
+    
+    # Remove múltiplos espaços
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Normaliza quebras duplas para ter exatamente uma linha em branco
+    text = re.sub(r'\n\s*\n\s*', '\n\n', text)
+    
+    # Remove espaços no início e fim do texto
+    text = text.strip()
+    
+    return text
+
 def validate_tts_params(pitch, rate):
     """
     Valida os parâmetros de síntese de voz.
@@ -151,7 +183,7 @@ async def edge_tts_convert(text, voice, output_file, pitch="0", rate="0"):
     await communicate.save(output_file)
 
 async def convert_to_speech(text, output_file, engine, language, voice, pitch, rate, preset, pause_size):
-    """Função principal de conversão"""
+    """Função principal de conversão de texto para fala"""
     if preset and preset in PRESETS:
         config = PRESETS[preset]
         voice = config['voice']
@@ -160,41 +192,47 @@ async def convert_to_speech(text, output_file, engine, language, voice, pitch, r
         style = config.get('style', 'general')
         print(f"Usando preset '{preset}' com estilo '{style}'")
 
-    # Só processa padrões e pausas se o texto não for SSML
+    # Processa quebras de linha se estiver usando Edge TTS
+    if engine == 'edge':
+        text = process_line_breaks(text)
+
     is_ssml = text.strip().startswith('<speak')
     if not is_ssml:
-        # Aplica os padrões de substituição
         text = process_text_with_patterns(text)
-        
-        # Processa pausas se necessário
         if pause_size > 0:
             pause_ms = pause_size * 100
             parts = re.split(r'([.!?:;])', text)
             processed_text = ""
-            
             for i in range(0, len(parts)-1, 2):
                 if parts[i].strip():
                     sentence = parts[i].strip() + parts[i+1]
                     processed_text += f"{sentence} <break time='{pause_ms}ms'/> "
-            
             if len(parts) % 2 == 1 and parts[-1].strip():
                 processed_text += parts[-1].strip()
-            
             text = processed_text.strip()
     
     with tqdm(total=1, desc="Convertendo", unit="arquivo") as pbar:
         try:
-            if engine == "gtts":
-                clean_text = re.sub(r'<[^>]+>', '', text)
-                tts = gTTS(text=clean_text, lang=language)
-                tts.save(output_file)
-            elif engine == "azure":
+            if engine == "azure":
                 style = PRESETS[preset]['style'] if preset else 'general'
-                success = azure_tts_convert(text, voice, output_file, pitch, rate, style)
-                if not success:
-                    raise Exception("Falha na síntese de voz com Azure")
-            else:  # edge
-                await edge_tts_convert(text, voice, output_file, pitch, rate)
+                if len(text) > 9000:
+                    base_name = output_file.rsplit('.', 1)[0]
+                    audio_files = await convert_large_text(text, base_name, voice, pitch, rate, style)
+                    if len(audio_files) > 1:
+                        print(f"\nGerados {len(audio_files)} arquivos:")
+                        for f in audio_files:
+                            print(f"- {f}")
+                else:
+                    success = azure_tts_convert(text, voice, output_file, pitch, rate, style)
+                    if not success:
+                        raise Exception("Falha na síntese de voz com Azure")
+            else:  # gtts ou edge
+                if engine == "gtts":
+                    clean_text = re.sub(r'<[^>]+>', '', text)
+                    tts = gTTS(text=clean_text, lang=language)
+                    tts.save(output_file)
+                else:  # edge
+                    await edge_tts_convert(text, voice, output_file, pitch, rate)
             pbar.update(1)
         except Exception as e:
             print(f"Erro durante a conversão: {str(e)}")
