@@ -7,8 +7,11 @@ with open('.patterns', 'r') as f:
 test_cases = [
    "Isso é um texto [RUTRUM] com *sigla*",
    "[ABC]", 
-   "[TEST]",
-   "[XYZ]"
+   "quero AA me cabá no sumidô",
+   "Ei ê lambá",
+   "## A marquesa de Valença",
+   "# A marquesa de Valença",
+   "([MIS]{.smallcaps}-[rj]{.smallcaps})"
 ]
 
 for caso in test_cases:

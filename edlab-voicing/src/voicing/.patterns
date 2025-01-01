@@ -15,8 +15,28 @@
     "replacement": "\\1"
   },
   {
-    "name": "Siglas",
-    "pattern": "([A-Z])(?=[A-Z\\]])",
-    "replacement": "\\1."
+   "name": "Siglas",
+   "pattern": "(?<=\\[)([A-Za-z])(?=[A-Za-z\\]])|(?<=\\.)[A-Za-z](?=[A-Za-z\\]])",
+   "replacement": "\\1."
+  }, 
+  {
+    "name": "Barra",
+    "pattern": "\\\\(?=\\s|$)",
+    "replacement": ""
+  },
+  {
+    "name": "Chapter",
+    "pattern": "^#\\s",
+    "replacement": ". Apertura de capítulo. "
+  },
+  {
+    "name": "Section", 
+    "pattern": "^##\\s",
+    "replacement": ". Apertura de seção. "
+  },
+  {
+     "name": "asterisk_space",
+     "pattern": "\\\\\\*\\s",
+     "replacement": ""
   }
 ]
