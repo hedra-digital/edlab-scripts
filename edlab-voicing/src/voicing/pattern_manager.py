@@ -65,24 +65,25 @@ class PatternManager:
         except Exception as e:
             print(f"Aviso: Erro ao carregar {filepath}: {str(e)}")
         return None
-
+        
     def apply_patterns(self, text):
-        """
-        Aplica todos os padrões carregados ao texto na ordem em que foram definidos
-        """
         modified_text = text
         for pattern in self.patterns:
             try:
+                before = modified_text
                 modified_text = re.sub(
                     pattern['pattern'],
                     pattern['replacement'],
                     modified_text,
                     flags=re.MULTILINE | re.UNICODE
                 )
+                if before != modified_text:
+                    print(f"Padrão '{pattern['name']}' alterou o texto:")
+                    print(f"Antes: {before}")
+                    print(f"Depois: {modified_text}\n")
             except Exception as e:
                 print(f"Erro ao aplicar padrão {pattern['name']}: {str(e)}")
         return modified_text
-
 
 def process_text_with_patterns(text, project_dir=None):
     """

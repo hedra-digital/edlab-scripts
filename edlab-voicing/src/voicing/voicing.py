@@ -192,6 +192,22 @@ async def convert_to_speech(text, output_file, engine, language, voice, pitch, r
         style = config.get('style', 'general')
         print(f"Usando preset '{preset}' com estilo '{style}'")
 
+    # Primeiro aplica os patterns
+    if not text.strip().startswith('<speak'):
+        text = process_text_with_patterns(text)
+
+    # Depois processa as quebras de linha
+    if engine == 'edge':
+        text = process_line_breaks(text)
+
+    if preset and preset in PRESETS:
+        config = PRESETS[preset]
+        voice = config['voice']
+        pitch = config['pitch']
+        rate = config['rate']
+        style = config.get('style', 'general')
+        print(f"Usando preset '{preset}' com estilo '{style}'")
+
     # Processa quebras de linha se estiver usando Edge TTS
     if engine == 'edge':
         text = process_line_breaks(text)
