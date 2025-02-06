@@ -6,11 +6,16 @@ import os
 from tqdm import tqdm
 import re
 import azure.cognitiveservices.speech as speechsdk
-from .pattern_manager import process_text_with_patterns
+from pattern_manager import process_text_with_patterns
+from elevenlabs_integration import ElevenLabsTTS, ELEVENLABS_VOICES
 
 # Configurações do Azure Speech Service
 AZURE_SPEECH_KEY = "25lM4tmGc07aXoUcE99p99DcJzGAAj8HKZAKyUUG2c1jXk0tgVMKJQQJ99ALACZoyfiXJ3w3AAAYACOGm24o"
 AZURE_SPEECH_REGION = "brazilsouth"
+
+# Add ElevenLabs configuration
+ELEVENLABS_API_KEY = "sk_2b5385cba7c47b56c598f195c618ec8296956744b32c4e88"
+
 
 # Presets para diferentes estilos de voz
 # Cada preset define configurações específicas para diferentes casos de uso
@@ -182,40 +187,25 @@ async def edge_tts_convert(text, voice, output_file, pitch="0", rate="0"):
     
     await communicate.save(output_file)
 
+
 async def convert_to_speech(text, output_file, engine, language, voice, pitch, rate, preset, pause_size):
-    """Função principal de conversão de texto para fala"""
+    """Main function for text-to-speech conversion"""
     if preset and preset in PRESETS:
         config = PRESETS[preset]
         voice = config['voice']
         pitch = config['pitch']
         rate = config['rate']
         style = config.get('style', 'general')
-        print(f"Usando preset '{preset}' com estilo '{style}'")
+        print(f"Using preset '{preset}' with style '{style}'")
 
-    # Primeiro aplica os patterns
+    # Process line breaks
+    if engine not in ['azure', 'elevenlabs']:
+        text = process_line_breaks(text)
+
+    # Process text with patterns if not SSML
     if not text.strip().startswith('<speak'):
         text = process_text_with_patterns(text)
-
-    # Depois processa as quebras de linha
-    if engine == 'edge':
-        text = process_line_breaks(text)
-
-    if preset and preset in PRESETS:
-        config = PRESETS[preset]
-        voice = config['voice']
-        pitch = config['pitch']
-        rate = config['rate']
-        style = config.get('style', 'general')
-        print(f"Usando preset '{preset}' com estilo '{style}'")
-
-    # Processa quebras de linha se estiver usando Edge TTS
-    if engine == 'edge':
-        text = process_line_breaks(text)
-
-    is_ssml = text.strip().startswith('<speak')
-    if not is_ssml:
-        text = process_text_with_patterns(text)
-        if pause_size > 0:
+        if pause_size > 0 and engine != 'elevenlabs':
             pause_ms = pause_size * 100
             parts = re.split(r'([.!?:;])', text)
             processed_text = ""
@@ -226,23 +216,23 @@ async def convert_to_speech(text, output_file, engine, language, voice, pitch, r
             if len(parts) % 2 == 1 and parts[-1].strip():
                 processed_text += parts[-1].strip()
             text = processed_text.strip()
-    
-    with tqdm(total=1, desc="Convertendo", unit="arquivo") as pbar:
+
+    with tqdm(total=1, desc="Converting", unit="file") as pbar:
         try:
-            if engine == "azure":
+            if engine == "elevenlabs":
+                tts = ElevenLabsTTS(ELEVENLABS_API_KEY)
+                # If voice is a name from ELEVENLABS_VOICES, get its ID
+                voice_id = ELEVENLABS_VOICES.get(voice, voice)
+                success = await tts.convert_to_speech(text, output_file, voice_id)
+                if not success:
+                    raise Exception("Failed to synthesize speech with ElevenLabs")
+            elif engine == "azure":
+                # Existing Azure implementation...
                 style = PRESETS[preset]['style'] if preset else 'general'
-                if len(text) > 9000:
-                    base_name = output_file.rsplit('.', 1)[0]
-                    audio_files = await convert_large_text(text, base_name, voice, pitch, rate, style)
-                    if len(audio_files) > 1:
-                        print(f"\nGerados {len(audio_files)} arquivos:")
-                        for f in audio_files:
-                            print(f"- {f}")
-                else:
-                    success = azure_tts_convert(text, voice, output_file, pitch, rate, style)
-                    if not success:
-                        raise Exception("Falha na síntese de voz com Azure")
-            else:  # gtts ou edge
+                success = azure_tts_convert(text, voice, output_file, pitch, rate, style)
+                if not success:
+                    raise Exception("Failed to synthesize speech with Azure")
+            else:  # gtts or edge
                 if engine == "gtts":
                     clean_text = re.sub(r'<[^>]+>', '', text)
                     tts = gTTS(text=clean_text, lang=language)
@@ -251,16 +241,25 @@ async def convert_to_speech(text, output_file, engine, language, voice, pitch, r
                     await edge_tts_convert(text, voice, output_file, pitch, rate)
             pbar.update(1)
         except Exception as e:
-            print(f"Erro durante a conversão: {str(e)}")
+            print(f"Error during conversion: {str(e)}")
             raise
 
+
 async def list_voices():
-    """Lista todas as vozes disponíveis no Edge TTS"""
+    """List all available voices for the selected engine"""
+    print("\nElevenLabs Voices:")
+    print("-" * 50)
+    for name, voice_id in ELEVENLABS_VOICES.items():
+        print(f"Name: {name}")
+        print(f"ID: {voice_id}")
+        print("-" * 50)
+    
+    print("\nEdge TTS Voices:")
     voices = await edge_tts.list_voices()
     for voice in voices:
-        print(f"Nome: {voice['Name']}")
-        print(f"Idioma: {voice['Locale']}")
-        print(f"Gênero: {voice['Gender']}")
+        print(f"Name: {voice['Name']}")
+        print(f"Language: {voice['Locale']}")
+        print(f"Gender: {voice['Gender']}")
         print("-" * 50)
 
 def list_presets():
@@ -272,10 +271,6 @@ def list_presets():
 
 
 
-#!/usr/bin/env python3
-# Seu código atual aqui, mas com algumas modificações:
-
-
 def main():
     """
     Função principal que será chamada quando o comando 'voicing' for executado.
@@ -284,44 +279,40 @@ def main():
     - Verificação de condições necessárias
     - Execução da conversão de texto para fala
     """
-    parser = argparse.ArgumentParser(description='Converter texto em áudio')
-    parser.add_argument('-i', '--input', help='Arquivo de entrada (markdown ou txt)')
-    parser.add_argument('--text', help='Texto para converter em áudio')
-    parser.add_argument('-o', '--output', default='output.mp3', help='Nome do arquivo de saída')
-    parser.add_argument('--engine', choices=['gtts', 'edge', 'azure'], default='edge', 
-                        help='Motor de síntese de voz')
-    parser.add_argument('--language', default='pt-br', help='Código do idioma (para gtts)')
-    parser.add_argument('--voice', default='pt-BR-FranciscaNeural', 
-                        help='Voz a ser usada (para edge/azure)')
+    parser = argparse.ArgumentParser(description='Convert text to speech')
+    parser.add_argument('-i', '--input', help='Input file (markdown or txt)')
+    parser.add_argument('--text', help='Text to convert to speech')
+    parser.add_argument('-o', '--output', default='output.mp3', help='Output filename')
+    parser.add_argument('--engine', choices=['gtts', 'edge', 'azure', 'elevenlabs'], 
+                       default='edge', help='Speech synthesis engine')
+    parser.add_argument('--language', default='pt-br', help='Language code (for gtts)')
+    parser.add_argument('--voice', default='MZxV5lN3cv7hi1376O0m',  # Ana Dias as default
+                       help='Voice to use (ID or name for elevenlabs, voice name for edge/azure)')
     parser.add_argument('--pitch', default="0",
-                        help='Ajuste do tom da voz (-100 a +100)')
+                       help='Voice pitch adjustment (-100 to +100)')
     parser.add_argument('--rate', default="0",
-                        help='Ajuste da velocidade (-100 a +100)')
+                       help='Speed adjustment (-100 to +100)')
     parser.add_argument('--pause', type=int, default=0,
-                        help='Tamanho das pausas (0 para desativar, > 0 para ativar)')
+                       help='Pause size (0 to disable, > 0 to enable)')
     parser.add_argument('--preset', choices=list(PRESETS.keys()),
-                        help='Usar configuração predefinida')
-    parser.add_argument('--list-voices', action='store_true', 
-                        help='Lista todas as vozes disponíveis')
+                       help='Use predefined configuration')
+    parser.add_argument('--list-voices', action='store_true',
+                       help='List all available voices')
     parser.add_argument('--list-presets', action='store_true',
-                        help='Lista todos os presets disponíveis')   
-    
+                       help='List all available presets')
+
     args = parser.parse_args()
     
-    # Executa os comandos de listagem se solicitados
     if args.list_voices:
         return asyncio.run(list_voices())
     elif args.list_presets:
         return list_presets()
     
-    # Verifica se foi fornecido texto ou arquivo de entrada
     if not args.text and not args.input:
-        parser.error("É necessário fornecer --text ou -i (arquivo de entrada)")
+        parser.error("You must provide --text or -i (input file)")
     
-    # Obtém o texto da entrada apropriada
     text = read_text_file(args.input) if args.input else args.text
     
-    # Executa a conversão de texto para fala
     try:
         asyncio.run(convert_to_speech(
             text,
@@ -334,17 +325,20 @@ def main():
             args.preset,
             args.pause
         ))
-        print(f"\nAúdio gerado com sucesso: {args.output}")
+        print(f"\nAudio generated successfully: {args.output}")
     except Exception as e:
-        error_message = f"Erro durante a conversão: {str(e)}"
+        error_message = f"Error during conversion: {str(e)}"
         if "AZURE_SPEECH_KEY" in str(e):
-            error_message += "\nVerifique se a chave do Azure Speech está correta."
+            error_message += "\nCheck if Azure Speech key is correct."
         elif "AZURE_SPEECH_REGION" in str(e):
-            error_message += "\nVerifique se a região do Azure Speech está correta."
+            error_message += "\nCheck if Azure Speech region is correct."
+        elif "ELEVENLABS_API_KEY" in str(e):
+            error_message += "\nCheck if ElevenLabs API key is correct."
         print(error_message)
         return 1
 
     return 0
+
 
 if __name__ == "__main__":
     """

@@ -1,7 +1,7 @@
 # Isso é um Título
 
-cinco anos entre 1970 e
-1975, período em que a peça foi totalmente censurada.
+cinco anos [entre] 1970 e
+1975, período em que [CNPq] a peça foi [ONU] totalmente [AGORA] censurada.
 
 ## Brecht dos amadores
 

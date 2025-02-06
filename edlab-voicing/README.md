@@ -1,170 +1,162 @@
-# Voicing - Text-to-Speech Converter
+# Text-to-Speech (TTS) Command Line Tool
+Um utilitário de linha de comando para converter texto em fala usando diferentes engines de síntese de voz.
 
-A versatile command-line tool for converting text to speech using multiple engines including Edge TTS, Azure Speech Service, and gTTS. Supports various voices, presets, and customizable speech parameters.
+## 🌟 Características
 
-## Features
-
-- Multiple TTS engines support:
-  - Microsoft Edge TTS
+- Múltiplos engines de síntese de voz:
   - Azure Speech Service
+  - Edge TTS
   - Google Text-to-Speech (gTTS)
-- Customizable voice presets for different use cases
-- Support for SSML and plain text
-- Automatic text preprocessing with pattern matching
-- Configurable speech parameters (pitch, rate, pauses)
-- Support for batch processing of large texts
+- Presets predefinidos para diferentes estilos de narração
+- Suporte a SSML (Speech Synthesis Markup Language)
+- Controle de pitch e velocidade
+- Pausas automáticas customizáveis
+- Suporte a múltiplos idiomas
 
-## Prerequisites
+## 📋 Pré-requisitos
 
-- Python 3.8 or higher
-- pipx (for global installation)
-
-### Installing pipx
-
-On Ubuntu/Debian:
 ```bash
-sudo apt update
-sudo apt install python3-pip
-python3 -m pip install --user pipx
-python3 -m pipx ensurepath
+# Instale as dependências necessárias
+pip install azure-cognitiveservices-speech edge-tts gtts tqdm
 ```
 
-On macOS:
+Para usar o Azure Speech Service, você precisará de:
+1. Uma conta Azure
+2. Um recurso de Speech Service configurado
+3. Chave de API e região definidas como variáveis de ambiente:
+
 ```bash
-brew install pipx
-pipx ensurepath
+export AZURE_SPEECH_KEY="sua_chave_aqui"
+export AZURE_SPEECH_REGION="sua_região_aqui"
 ```
 
-On Windows:
+## 🚀 Uso Básico
+
+### Texto Simples
 ```bash
-python -m pip install --user pipx
-python -m pipx ensurepath
+python voicing.py --text "Olá mundo!" --engine azure --preset default -o saida.mp3
 ```
 
-## Installation
-
-1. Clone the repository:
+### Com SSML
 ```bash
-git clone <repository-url>
-cd voicing
+python voicing.py --text "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='pt-BR'><voice name='pt-BR-AntonioNeural'><prosody rate='-15%' pitch='-10Hz'>Seu texto aqui</prosody></voice></speak>" --engine azure -o saida.mp3
 ```
 
-2. Install using Make:
+### Com Pausas Automáticas
 ```bash
-make install
+python voicing.py --text "Primeira frase. Segunda frase! Terceira frase?" --pause 5 --engine azure -o saida.mp3
 ```
 
-### Makefile Commands
+### com arquivos
 
-The project includes a Makefile with several useful commands:
-
-- `make deps`: Creates a virtual environment and installs all dependencies from requirements.txt
-- `make install`: Runs `deps`, prepares directories, and installs the package globally using pipx
-- `make uninstall`: Removes the global installation of the package
-- `make clean`: Removes all temporary files, build artifacts, and the virtual environment
-- `make reinstall`: Combination of uninstall, clean, and install - useful for complete reset
-- `make prepare`: Creates necessary directories and sets permissions
-
-Alternative manual installation (if you don't want to use Make):
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python voicing.py -i ./examples/noticia.txt --engine azure --preset news --pause 3 -o noticia.mp3
+```
+
+
+
+
+
+## 🎭 Presets Disponíveis
+
+| Preset     | Descrição                                    | Voz                  | Pitch | Rate  |
+|------------|----------------------------------------------|---------------------|-------|-------|
+| default    | Configuração padrão balanceada               | Francisca (fem)     | 0     | 0     |
+| audiobook  | Otimizado para narração de livros           | Antonio (masc)      | -10   | -15   |
+| news       | Estilo de apresentação de notícias          | Francisca (fem)     | 0     | +10   |
+| story      | Narração suave para histórias               | Brenda (fem)        | 0     | -10   |
+| formal     | Tom profissional para documentos            | Antonio (masc)      | -20   | -5    |
+
+## 🏷️ Exemplos de Tags SSML
+
+### Ênfase
+```xml
+<emphasis level="strong">Texto enfatizado</emphasis>
+```
+
+### Datas
+```xml
+<say-as interpret-as="date" format="dmy">15/04/2024</say-as>
+```
+
+### Siglas/Abreviações
+```xml
+<sub alias="I B M">IBM</sub>
+```
+
+### Pausas
+```xml
+<break time="500ms"/>
+```
+
+## 🎯 Exemplos Completos
+
+### Exemplo com Múltiplas Tags SSML
+```bash
+python voicing.py --text "Hoje, dia <say-as interpret-as='date' format='dmy'>15/04/2024</say-as>, iniciamos nosso teste de síntese de voz. A <emphasis level='strong'>inteligência artificial</emphasis> está transformando nossa forma de interagir com a tecnologia! Você sabia que a <sub alias='I B M'>IBM</sub> foi uma das pioneiras nesta área?" --engine azure --preset audiobook --pause 5 -o teste_simples.mp3
+```
+
+## 🛠️ Opções de Comando
+
+```bash
+  -i, --input        Arquivo de entrada (markdown ou txt)
+  --text            Texto para converter em áudio
+  -o, --output      Nome do arquivo de saída (padrão: output.mp3)
+  --engine          Motor de síntese (gtts/edge/azure)
+  --language        Código do idioma para gTTS (padrão: pt-br)
+  --voice           Voz a ser usada (padrão: pt-BR-FranciscaNeural)
+  --pitch           Ajuste do tom (-100 a +100)
+  --rate            Ajuste da velocidade (-100 a +100)
+  --pause           Tamanho das pausas (0 para desativar)
+  --preset          Usar configuração predefinida
+  --list-voices     Lista todas as vozes disponíveis
+  --list-presets    Lista todos os presets disponíveis
+```
+
+## 📚 Links Úteis
+
+- [Portal Azure](https://portal.azure.com)
+- [Documentação do Azure Speech Service](https://docs.microsoft.com/azure/cognitive-services/speech-service/)
+- [Referência SSML](https://docs.microsoft.com/azure/cognitive-services/speech-service/speech-synthesis-markup)
+
+## 📝 Notas
+
+1. O Azure Speech Service oferece recursos avançados como:
+   - Estilos de fala (narração, notícias, etc.)
+   - Controle de emoções
+   - Pausas naturais
+   
+2. As pausas automáticas (--pause) são úteis para:
+   - Melhorar a naturalidade da fala
+   - Criar ritmo na narração
+   - Facilitar a compreensão
+
+3. Os presets foram otimizados para:
+   - Audiobooks (narração profissional)
+   - Notícias (apresentação clara)
+   - Histórias (narração envolvente)
+   - Documentos formais (tom profissional)
+
+# Com o python
+
+
+## Não esquecer de ativar a máquina virtual
+
+```bash
+source venv/bin/activate
+```
+
+## Se precisar reinstalar libs
+
+```bash
+pip install azure-cognitiveservices-speech edge-tts gtts tqdm
+```
+
+## Como gerar e instalar o arquivo requirements.txt
+
+```bash
+pip freeze > requirements.txt
 pip install -r requirements.txt
-pipx install -e . --force
 ```
 
-## Usage
 
-### Basic Usage
-
-Convert text to speech:
-```bash
-voicing --text "Hello, world!" --output hello.mp3
-```
-
-Convert text from file:
-```bash
-voicing -i input.txt -o output.mp3
-```
-
-### Using Different Engines
-
-Edge TTS (default):
-```bash
-voicing -i input.txt --engine edge --voice pt-BR-FranciscaNeural
-```
-
-Azure Speech Service:
-```bash
-voicing -i input.txt --engine azure --voice pt-BR-AntonioNeural
-```
-
-Google TTS:
-```bash
-voicing -i input.txt --engine gtts --language pt-br
-```
-
-### Using Presets
-
-Available presets: default, audiobook, news, story, formal
-
-```bash
-voicing -i input.txt --preset audiobook
-```
-
-### Customizing Voice Parameters
-
-```bash
-voicing -i input.txt --pitch 20 --rate -10 --pause 5
-```
-
-### Listing Available Options
-
-List available voices:
-```bash
-voicing --list-voices
-```
-
-List available presets:
-```bash
-voicing --list-presets
-```
-
-## Configuration
-
-### Azure Speech Service
-
-To use the Azure Speech Service, you need to set up your credentials:
-
-1. Get your Azure Speech Service key and region
-2. Set the following environment variables:
-```bash
-export AZURE_SPEECH_KEY="your-key-here"
-export AZURE_SPEECH_REGION="your-region"
-```
-
-### Pattern Matching
-
-Create a `.patterns` file in your project directory or globally to define text replacement patterns:
-
-```json
-[
-  {
-    "name": "numbers",
-    "pattern": "\\b\\d+\\b",
-    "replacement": "number"
-  }
-]
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.

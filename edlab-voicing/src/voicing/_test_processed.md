@@ -1,7 +1,7 @@
 . Apertura de capítulo. Isso é um Título
 
-cinco anos entre 1970 e
-1975, período em que a peça foi totalmente censurada.
+cinco anos [entre] 1970 e
+1975, período em que [C.N.Pq] a peça foi [O.N.U.] totalmente [A.G.O.R.A.] censurada.
 
 . Apertura de seção. Brecht dos amadores
 
