@@ -6,8 +6,8 @@ import os
 from tqdm import tqdm
 import re
 import azure.cognitiveservices.speech as speechsdk
-from pattern_manager import process_text_with_patterns
-from elevenlabs_integration import ElevenLabsTTS, ELEVENLABS_VOICES
+from .pattern_manager import process_text_with_patterns
+from .elevenlabs_integration import ElevenLabsTTS, ELEVENLABS_VOICES
 
 # Configurações do Azure Speech Service
 AZURE_SPEECH_KEY = "25lM4tmGc07aXoUcE99p99DcJzGAAj8HKZAKyUUG2c1jXk0tgVMKJQQJ99ALACZoyfiXJ3w3AAAYACOGm24o"
