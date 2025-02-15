@@ -88,23 +88,6 @@ class RRDBNet(torch.nn.Module):
         out = self.conv_last(self.lrelu(self.conv_hr(feat)))
         return out
 
-class RRDBBlock(torch.nn.Module):
-    def __init__(self):
-        super(RRDBBlock, self).__init__()
-        self.conv1 = torch.nn.Conv2d(64, 32, 3, 1, 1, bias=True)
-        self.conv2 = torch.nn.Conv2d(96, 32, 3, 1, 1, bias=True)
-        self.conv3 = torch.nn.Conv2d(128, 32, 3, 1, 1, bias=True)
-        self.conv4 = torch.nn.Conv2d(160, 64, 3, 1, 1, bias=True)
-        self.lrelu = torch.nn.LeakyReLU(negative_slope=0.2, inplace=True)
-        self.beta = 0.2
-        
-    def forward(self, x):
-        feat1 = self.lrelu(self.conv1(x))
-        feat2 = self.lrelu(self.conv2(torch.cat([x, feat1], 1)))
-        feat3 = self.lrelu(self.conv3(torch.cat([x, feat1, feat2], 1)))
-        feat4 = self.lrelu(self.conv4(torch.cat([x, feat1, feat2, feat3], 1)))
-        return feat4 * self.beta + x
-
 def setup_logging():
     logging.basicConfig(
         level=logging.INFO,
@@ -149,8 +132,19 @@ def setup_model(scale):
     model = model.to(device)
     return model, device
 
-def process_image(input_path, model, device, output_dir=None):
+def backup_image(image_path):
+    backup_dir = Path('./old_images')
+    backup_dir.mkdir(exist_ok=True)
+    
+    dest = backup_dir / image_path.name
+    shutil.copy2(str(image_path), str(dest))
+    logging.info(f"Backup criado: {dest}")
+
+def process_image(input_path, model, device):
     try:
+        # Fazer backup da imagem original
+        backup_image(input_path)
+        
         # Ler a imagem
         img = Image.open(input_path).convert('RGB')
         img = np.array(img)
@@ -169,28 +163,13 @@ def process_image(input_path, model, device, output_dir=None):
         output = (output * 255.0).round().astype(np.uint8)
         output = np.transpose(output, (1, 2, 0))
         
-        # Definir caminho de saída
-        if output_dir:
-            output_path = Path(output_dir) / input_path.name
-        else:
-            output_path = input_path.parent / f"upscaled_{input_path.name}"
-            
-        # Salvar imagem processada
-        Image.fromarray(output).save(str(output_path))
-        logging.info(f"Imagem processada salva em: {output_path}")
+        # Salvar imagem processada no lugar da original
+        Image.fromarray(output).save(str(input_path))
+        logging.info(f"Imagem processada salva em: {input_path}")
         return True
     except Exception as e:
         logging.error(f"Erro ao processar {input_path}: {str(e)}")
         return False
-
-def backup_images(image_paths, backup_dir):
-    backup_dir = Path(backup_dir)
-    backup_dir.mkdir(exist_ok=True)
-    
-    for img_path in image_paths:
-        dest = backup_dir / img_path.name
-        shutil.copy2(str(img_path), str(dest))
-        logging.info(f"Backup criado: {dest}")
 
 def main():
     setup_logging()
@@ -222,12 +201,6 @@ def main():
     if not image_paths:
         logging.error("Nenhuma imagem encontrada para processar!")
         return
-    
-    # Criar backup se necessário
-    if len(input_paths) == 1 and input_paths[0].is_dir():
-        backup_dir = Path('bkp-images')
-        logging.info(f"Criando backup das imagens em: {backup_dir}")
-        backup_images(image_paths, backup_dir)
     
     # Processar imagens
     total = len(image_paths)
