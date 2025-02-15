@@ -140,37 +140,6 @@ def backup_image(image_path):
     shutil.copy2(str(image_path), str(dest))
     logging.info(f"Backup criado: {dest}")
 
-def process_image(input_path, model, device):
-    try:
-        # Fazer backup da imagem original
-        backup_image(input_path)
-        
-        # Ler a imagem
-        img = Image.open(input_path).convert('RGB')
-        img = np.array(img)
-        
-        # Preparar imagem para o modelo
-        img = img.astype(np.float32) / 255.
-        img = torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0)
-        img = img.to(device)
-        
-        # Processar imagem
-        with torch.no_grad():
-            output = model(img)
-        
-        # Converter resultado de volta para imagem
-        output = output.squeeze().float().cpu().clamp_(0, 1).numpy()
-        output = (output * 255.0).round().astype(np.uint8)
-        output = np.transpose(output, (1, 2, 0))
-        
-        # Salvar imagem processada no lugar da original
-        Image.fromarray(output).save(str(input_path))
-        logging.info(f"Imagem processada salva em: {input_path}")
-        return True
-    except Exception as e:
-        logging.error(f"Erro ao processar {input_path}: {str(e)}")
-        return False
-
 def should_process_image(image_path, min_size_kb, max_size_kb):
     """
     Verifica se a imagem deve ser processada baseado no seu tamanho
@@ -187,27 +156,87 @@ def should_process_image(image_path, min_size_kb, max_size_kb):
         
     return True
 
+
+def process_image(input_path, model, device, target_dpi=300, target_width_mm=None):
+    try:
+        # Fazer backup da imagem original
+        backup_image(input_path)
+        
+        # Ler a imagem
+        img = Image.open(input_path).convert('RGB')
+        original_width, original_height = img.size
+        
+        # Calcular nova resolução se width foi especificado
+        if target_width_mm:
+            # Converter mm para polegadas (1 polegada = 25.4mm)
+            target_width_inches = target_width_mm / 25.4
+            # Calcular pixels necessários para o width desejado em 300dpi
+            target_width_pixels = int(target_width_inches * target_dpi)
+            # Manter proporção
+            ratio = original_height / original_width
+            target_height_pixels = int(target_width_pixels * ratio)
+        else:
+            target_width_pixels = original_width
+            target_height_pixels = original_height
+        
+        # Preparar imagem para o modelo
+        img_array = np.array(img)
+        img_tensor = torch.from_numpy(img_array).float() / 255.0
+        img_tensor = img_tensor.permute(2, 0, 1).unsqueeze(0)
+        img_tensor = img_tensor.to(device)
+        
+        # Processar imagem
+        with torch.no_grad():
+            output = model(img_tensor)
+        
+        # Converter resultado de volta para imagem
+        output = output.squeeze().float().cpu().clamp_(0, 1).numpy()
+        output = (output * 255.0).round().astype(np.uint8)
+        output = np.transpose(output, (1, 2, 0))
+        output_img = Image.fromarray(output)
+        
+        # Redimensionar para o tamanho alvo se necessário
+        if target_width_pixels != output_img.width:
+            output_img = output_img.resize((target_width_pixels, target_height_pixels), 
+                                         Image.Resampling.LANCZOS)
+        
+        # Definir DPI
+        output_img.info['dpi'] = (target_dpi, target_dpi)
+        
+        # Salvar imagem processada
+        output_img.save(str(input_path), dpi=(target_dpi, target_dpi))
+        logging.info(f"Imagem processada salva em: {input_path}")
+        logging.info(f"Resolução final: {output_img.size[0]}x{output_img.size[1]} pixels @ {target_dpi} DPI")
+        if target_width_mm:
+            logging.info(f"Tamanho para impressão: {target_width_mm}mm x {target_width_mm * output_img.size[1] / output_img.size[0]:.1f}mm")
+        
+        return True
+    except Exception as e:
+        logging.error(f"Erro ao processar {input_path}: {str(e)}")
+        return False
+
 def main():
     setup_logging()
-    parser = argparse.ArgumentParser(description='Upscaler: Aumentar resolução de imagens usando Real-ESRGAN')
+    parser = argparse.ArgumentParser(description='EdLab Upscale - Aumentar resolução de imagens usando Real-ESRGAN')
     parser.add_argument('-i', '--input', nargs='+', required=True, 
                         help='Caminho para imagem(ns) ou diretório')
     parser.add_argument('-s', '--scale', type=int, choices=[2, 4], default=4,
                         help='Fator de escala (2 ou 4). Padrão: 4')
     parser.add_argument('-m', '--min-size', type=float, default=0,
-                        help='Tamanho mínimo em KB para processar a imagem. Padrão: 0 (sem limite mínimo)')
+                        help='Tamanho mínimo em KB para processar a imagem')
     parser.add_argument('-M', '--max-size', type=float, default=0,
-                        help='Tamanho máximo em KB para processar a imagem. Padrão: 0 (sem limite máximo)')
+                        help='Tamanho máximo em KB para processar a imagem')
+    parser.add_argument('-w', '--workers', type=int, default=1,
+                        help='Número de imagens processadas simultaneamente')
+    parser.add_argument('--dpi', type=int, default=300,
+                        help='DPI desejado para a imagem de saída. Padrão: 300')
+    parser.add_argument('--width', type=float,
+                        help='Largura desejada em milímetros (mantém proporção)')
     
     args = parser.parse_args()
     
     # Inicializar o modelo
     logging.info(f"Inicializando o modelo Real-ESRGAN (escala {args.scale}x)...")
-    if args.min_size > 0:
-        logging.info(f"Tamanho mínimo definido: {args.min_size}KB")
-    if args.max_size > 0:
-        logging.info(f"Tamanho máximo definido: {args.max_size}KB")
-    
     model, device = setup_model(args.scale)
     
     # Coletar caminhos das imagens
@@ -243,9 +272,9 @@ def main():
             continue
             
         logging.info(f"Processando imagem {i}/{total}: {img_path.name} ({size_kb:.1f}KB)")
-        if process_image(img_path, model, device):
+        if process_image(img_path, model, device, args.dpi, args.width):
             successful += 1
-    
+            
     logging.info(f"\nProcessamento concluído!")
     logging.info(f"- Imagens processadas com sucesso: {successful}")
     if args.min_size > 0:
