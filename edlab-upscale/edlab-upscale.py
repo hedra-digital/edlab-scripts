@@ -4,13 +4,106 @@ import argparse
 import os
 import shutil
 from pathlib import Path
-from basicsr.archs.rrdbnet_arch import RRDBNet
-from basicsr.utils.download_util import load_file_from_url
-from realesrgan import RealESRGANer
-import cv2
 import torch
 import logging
-import torchvision.transforms.functional as F  # Mudança aqui
+from PIL import Image
+import numpy as np
+import urllib.request
+import ssl
+
+class RDBLayer(torch.nn.Module):
+    def __init__(self, nc):
+        super(RDBLayer, self).__init__()
+        self.conv1 = torch.nn.Conv2d(nc, 32, 3, 1, 1)
+        self.conv2 = torch.nn.Conv2d(nc + 32, 32, 3, 1, 1)
+        self.conv3 = torch.nn.Conv2d(nc + 64, 32, 3, 1, 1)
+        self.conv4 = torch.nn.Conv2d(nc + 96, 32, 3, 1, 1)
+        self.conv5 = torch.nn.Conv2d(nc + 128, nc, 3, 1, 1)
+        self.lrelu = torch.nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        self.beta = 0.2
+
+    def forward(self, x):
+        x1 = self.lrelu(self.conv1(x))
+        x2 = self.lrelu(self.conv2(torch.cat((x, x1), 1)))
+        x3 = self.lrelu(self.conv3(torch.cat((x, x1, x2), 1)))
+        x4 = self.lrelu(self.conv4(torch.cat((x, x1, x2, x3), 1)))
+        x5 = self.conv5(torch.cat((x, x1, x2, x3, x4), 1))
+        return x5 * self.beta + x
+
+class RRDB(torch.nn.Module):
+    def __init__(self, nc):
+        super(RRDB, self).__init__()
+        self.rdb1 = RDBLayer(nc)
+        self.rdb2 = RDBLayer(nc)
+        self.rdb3 = RDBLayer(nc)
+        self.beta = 0.2
+
+    def forward(self, x):
+        out = self.rdb1(x)
+        out = self.rdb2(out)
+        out = self.rdb3(out)
+        return out * self.beta + x
+
+class RRDBNet(torch.nn.Module):
+    def __init__(self, scale):
+        super(RRDBNet, self).__init__()
+        self.scale = scale
+        
+        # First conv
+        self.conv_first = torch.nn.Conv2d(3, 64, 3, 1, 1)
+        
+        # Body
+        self.body = torch.nn.ModuleList([RRDB(64) for _ in range(23)])
+        self.conv_body = torch.nn.Conv2d(64, 64, 3, 1, 1)
+        
+        # Upsampling
+        if scale == 4:
+            self.conv_up1 = torch.nn.Conv2d(64, 64, 3, 1, 1)
+            self.conv_up2 = torch.nn.Conv2d(64, 64, 3, 1, 1)
+        elif scale == 2:
+            self.conv_up1 = torch.nn.Conv2d(64, 64, 3, 1, 1)
+            
+        self.conv_hr = torch.nn.Conv2d(64, 64, 3, 1, 1)
+        self.conv_last = torch.nn.Conv2d(64, 3, 3, 1, 1)
+        
+        self.lrelu = torch.nn.LeakyReLU(negative_slope=0.2, inplace=True)
+
+    def forward(self, x):
+        feat = self.conv_first(x)
+        body_feat = feat.clone()
+        
+        for block in self.body:
+            body_feat = block(body_feat)
+            
+        body_feat = self.conv_body(body_feat)
+        body_feat = body_feat + feat
+        
+        # Upsampling
+        if self.scale == 4:
+            feat = self.lrelu(self.conv_up1(torch.nn.functional.interpolate(body_feat, scale_factor=2, mode='nearest')))
+            feat = self.lrelu(self.conv_up2(torch.nn.functional.interpolate(feat, scale_factor=2, mode='nearest')))
+        elif self.scale == 2:
+            feat = self.lrelu(self.conv_up1(torch.nn.functional.interpolate(body_feat, scale_factor=2, mode='nearest')))
+            
+        out = self.conv_last(self.lrelu(self.conv_hr(feat)))
+        return out
+
+class RRDBBlock(torch.nn.Module):
+    def __init__(self):
+        super(RRDBBlock, self).__init__()
+        self.conv1 = torch.nn.Conv2d(64, 32, 3, 1, 1, bias=True)
+        self.conv2 = torch.nn.Conv2d(96, 32, 3, 1, 1, bias=True)
+        self.conv3 = torch.nn.Conv2d(128, 32, 3, 1, 1, bias=True)
+        self.conv4 = torch.nn.Conv2d(160, 64, 3, 1, 1, bias=True)
+        self.lrelu = torch.nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        self.beta = 0.2
+        
+    def forward(self, x):
+        feat1 = self.lrelu(self.conv1(x))
+        feat2 = self.lrelu(self.conv2(torch.cat([x, feat1], 1)))
+        feat3 = self.lrelu(self.conv3(torch.cat([x, feat1, feat2], 1)))
+        feat4 = self.lrelu(self.conv4(torch.cat([x, feat1, feat2, feat3], 1)))
+        return feat4 * self.beta + x
 
 def setup_logging():
     logging.basicConfig(
@@ -18,48 +111,72 @@ def setup_logging():
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
 
+def download_model(url, model_path):
+    if not os.path.exists(model_path):
+        logging.info(f"Baixando modelo de {url}")
+        # Desabilitar verificação SSL para download
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        with urllib.request.urlopen(url, context=ctx) as response:
+            with open(model_path, 'wb') as f:
+                f.write(response.read())
+        logging.info("Download concluído")
+
 def setup_model(scale):
     # Selecionar o modelo apropriado baseado na escala
     if scale == 2:
-        model_path = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x2plus.pth'
-        model_name = 'RealESRGAN_x2plus.pth'
+        model_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x2plus.pth'
+        model_path = 'RealESRGAN_x2plus.pth'
     else:  # scale 4
-        model_path = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth'
-        model_name = 'RealESRGAN_x4plus.pth'
+        model_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth'
+        model_path = 'RealESRGAN_x4plus.pth'
     
-    model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32)
-    
-    if not os.path.exists(model_name):
-        load_file_from_url(model_path, model_dir='.')
+    download_model(model_url, model_path)
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    upsampler = RealESRGANer(
-        scale=scale,
-        model_path=model_name,
-        model=model,
-        device=device
-    )
-    return upsampler
+    model = RRDBNet(scale=scale)
+    
+    state_dict = torch.load(model_path, map_location=torch.device('cpu'))
+    if 'params_ema' in state_dict:
+        model.load_state_dict(state_dict['params_ema'])
+    elif 'params' in state_dict:
+        model.load_state_dict(state_dict['params'])
+    else:
+        model.load_state_dict(state_dict)
+    
+    model.eval()
+    model = model.to(device)
+    return model, device
 
-def process_image(input_path, upsampler, output_dir=None):
+def process_image(input_path, model, device, output_dir=None):
     try:
         # Ler a imagem
-        img = cv2.imread(str(input_path), cv2.IMREAD_UNCHANGED)
-        if img is None:
-            logging.error(f"Não foi possível ler a imagem: {input_path}")
-            return False
-
-        # Processar a imagem
-        output, _ = upsampler.enhance(img)
-
+        img = Image.open(input_path).convert('RGB')
+        img = np.array(img)
+        
+        # Preparar imagem para o modelo
+        img = img.astype(np.float32) / 255.
+        img = torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0)
+        img = img.to(device)
+        
+        # Processar imagem
+        with torch.no_grad():
+            output = model(img)
+        
+        # Converter resultado de volta para imagem
+        output = output.squeeze().float().cpu().clamp_(0, 1).numpy()
+        output = (output * 255.0).round().astype(np.uint8)
+        output = np.transpose(output, (1, 2, 0))
+        
         # Definir caminho de saída
         if output_dir:
             output_path = Path(output_dir) / input_path.name
         else:
             output_path = input_path.parent / f"upscaled_{input_path.name}"
-
-        # Salvar a imagem processada
-        cv2.imwrite(str(output_path), output)
+            
+        # Salvar imagem processada
+        Image.fromarray(output).save(str(output_path))
         logging.info(f"Imagem processada salva em: {output_path}")
         return True
     except Exception as e:
@@ -87,7 +204,7 @@ def main():
     
     # Inicializar o modelo
     logging.info(f"Inicializando o modelo Real-ESRGAN (escala {args.scale}x)...")
-    upsampler = setup_model(args.scale)
+    model, device = setup_model(args.scale)
     
     # Coletar caminhos das imagens
     image_paths = []
@@ -118,7 +235,7 @@ def main():
     
     for i, img_path in enumerate(image_paths, 1):
         logging.info(f"Processando imagem {i}/{total}: {img_path.name}")
-        if process_image(img_path, upsampler):
+        if process_image(img_path, model, device):
             successful += 1
     
     logging.info(f"Processamento concluído! {successful}/{total} imagens processadas com sucesso.")
