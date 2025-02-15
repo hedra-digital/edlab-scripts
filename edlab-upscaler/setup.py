@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="edlab-upscaler",
+    name="upscaler",
     version="0.1.0",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
@@ -13,7 +13,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'edlab-upscaler=edlab_upscaler.upscaler:main',
+            'upscaler=upscaler.upscaler:main',
         ],
     },
     python_requires=">=3.12",

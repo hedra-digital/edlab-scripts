@@ -32,7 +32,7 @@ install: deps prepare
 # Desinstalar
 .PHONY: uninstall
 uninstall:
-	$(PIPX) uninstall edlab-upscaler || true
+	$(PIPX) uninstall upscaler || true
 
 # Limpar arquivos temporários
 .PHONY: clean
