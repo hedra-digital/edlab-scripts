@@ -18,7 +18,7 @@ setup(
     },
     python_requires=">=3.12",
     author="Jorge Sallum",
-    author_email="jorge@edlab.press",
+    author_email="jorge@hedra.com.br",
     description="Uma ferramenta de linha de comando para aumento de resolução de imagens usando Real-ESRGAN",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown"

@@ -21,8 +21,8 @@ deps: $(VENV)
 # Preparar diretórios
 .PHONY: prepare
 prepare:
-	mkdir -p src/edlab_upscaler.egg-info
-	chmod -R 777 src/edlab_upscaler.egg-info
+	mkdir -p src/upscaler.egg-info
+	chmod -R 777 src/upscaler.egg-info
 
 # Instalar globalmente
 .PHONY: install
