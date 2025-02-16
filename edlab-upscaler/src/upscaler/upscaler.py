@@ -166,67 +166,6 @@ def should_process_image(image_path, min_size_kb, max_size_kb):
         
     return True
 
-
-def process_image(input_path, model, device, target_dpi=300, target_width_mm=None):
-    try:
-        # Fazer backup da imagem original
-        backup_image(input_path)
-        
-        # Ler a imagem
-        img = Image.open(input_path).convert('RGB')
-        original_width, original_height = img.size
-        
-        # Calcular nova resolução se width foi especificado
-        if target_width_mm:
-            # Converter mm para polegadas (1 polegada = 25.4mm)
-            target_width_inches = target_width_mm / 25.4
-            # Calcular pixels necessários para o width desejado em 300dpi
-            target_width_pixels = int(target_width_inches * target_dpi)
-            # Manter proporção
-            ratio = original_height / original_width
-            target_height_pixels = int(target_width_pixels * ratio)
-        else:
-            target_width_pixels = original_width
-            target_height_pixels = original_height
-        
-        # Preparar imagem para o modelo
-        img_array = np.array(img)
-        img_tensor = torch.from_numpy(img_array).float() / 255.0
-        img_tensor = img_tensor.permute(2, 0, 1).unsqueeze(0)
-        img_tensor = img_tensor.to(device)
-        
-        # Processar imagem
-        with torch.no_grad():
-            output = model(img_tensor)
-        
-        # Converter resultado de volta para imagem
-        output = output.squeeze().float().cpu().clamp_(0, 1).numpy()
-        output = (output * 255.0).round().astype(np.uint8)
-        output = np.transpose(output, (1, 2, 0))
-        output_img = Image.fromarray(output)
-        
-        # Redimensionar para o tamanho alvo se necessário
-        if target_width_pixels != output_img.width:
-            output_img = output_img.resize((target_width_pixels, target_height_pixels), 
-                                         Image.Resampling.LANCZOS)
-        
-        # Definir DPI
-        output_img.info['dpi'] = (target_dpi, target_dpi)
-        
-        # Salvar imagem processada
-        output_img.save(str(input_path), dpi=(target_dpi, target_dpi))
-        logging.info(f"Imagem processada salva em: {input_path}")
-        logging.info(f"Resolução final: {output_img.size[0]}x{output_img.size[1]} pixels @ {target_dpi} DPI")
-        if target_width_mm:
-            logging.info(f"Tamanho para impressão: {target_width_mm}mm x {target_width_mm * output_img.size[1] / output_img.size[0]:.1f}mm")
-        
-        return True
-    
-    except Exception as e:
-        logging.error(f"Erro ao processar {input_path}: {str(e)}")
-        return False
-
-
 def get_system_info():
     """Retorna informações detalhadas do sistema"""
     process = psutil.Process(os.getpid())
@@ -244,21 +183,20 @@ def check_resources():
     """Verifica se há recursos disponíveis para continuar"""
     info = get_system_info()
     
+    # Usar o limite de memória definido pelo usuário
+    memory_limit = args.memory_limit  # Precisa ter acesso aos argumentos aqui
+    
     # Verificar CPU (limite de 60%)
     if info['system_cpu_percent'] > 60:
         logging.warning("CPU acima de 60%. Aguardando...")
         return False
         
-    # Verificar memória (limite de 70% do sistema)
-    if info['system_memory_percent'] > 70:
-        logging.warning("Memória do sistema acima de 70%. Aguardando...")
+    # Verificar memória (usando limite definido pelo usuário)
+    if info['system_memory_percent'] > memory_limit:
+        logging.warning(f"Memória do sistema acima de {memory_limit}%. Aguardando...")
         return False
     
-    # Verificar memória do processo (limite de 2GB)
-    if info['memory_used'] > 2048:  # 2GB em MB
-        logging.warning("Processo usando mais de 2GB. Aguardando...")
-        return False
-        
+    # Remover limite fixo de 2GB para permitir mais uso de memória
     return True
 
 def wait_for_resources(check_interval=5):
