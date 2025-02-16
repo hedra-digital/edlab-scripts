@@ -14,50 +14,8 @@ import gc
 import psutil
 import time
 import sys
-import math
-import signal
-import threading
-from queue import Queue
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed 
-
-
-class SystemMonitor:
-    def __init__(self, interval=5):
-        self.interval = interval
-        self.running = False
-        self._thread = None
-    
-    def _monitor(self):
-        while self.running:
-            log_system_status()
-            time.sleep(self.interval)
-    
-    def start(self):
-        """Inicia monitoramento em thread separada"""
-        if not self._thread:
-            self.running = True
-            self._thread = threading.Thread(target=self._monitor, daemon=True)
-            self._thread.start()
-            logging.debug("Monitor de sistema iniciado")
-    
-    def stop(self):
-        """Para o monitoramento"""
-        self.running = False
-        if self._thread:
-            self._thread.join()
-            self._thread = None
-            logging.debug("Monitor de sistema parado")
-
-@contextmanager
-def system_monitoring(interval=5):
-    """Context manager para monitoramento do sistema"""
-    monitor = SystemMonitor(interval)
-    try:
-        monitor.start()
-        yield
-    finally:
-        monitor.stop()
 
 # Adicionando controle de memória mais rigoroso
 class MemoryManager:
@@ -70,58 +28,35 @@ class MemoryManager:
         system = psutil.virtual_memory()
         process_memory = self.process.memory_info().rss / (1024 * 1024)  # MB
         free_memory = system.available / (1024 * 1024)  # MB
-        
-        info = {
+        return {
             'process_memory_mb': process_memory,
             'free_memory_mb': free_memory,
             'memory_percent': system.percent
         }
-        
-        # Logar informações detalhadas de memória
-        logging.debug(f"Status de Memória:")
-        logging.debug(f"- Processo: {info['process_memory_mb']:.1f}MB")
-        logging.debug(f"- Livre: {info['free_memory_mb']:.1f}MB")
-        logging.debug(f"- Uso Total: {info['memory_percent']:.1f}%")
-        
-        return info
     
     def check_memory(self):
         info = self.get_memory_info()
         
         if info['memory_percent'] > self.memory_limit_percent:
-            error_msg = f"Sistema usando {info['memory_percent']}% de memória (limite: {self.memory_limit_percent}%)"
-            logging.error(error_msg)
-            raise MemoryError(error_msg)
+            raise MemoryError(f"Sistema usando {info['memory_percent']}% de memória (limite: {self.memory_limit_percent}%)")
             
         if info['free_memory_mb'] < self.min_free_memory_mb:
-            error_msg = f"Memória livre insuficiente: {info['free_memory_mb']:.0f}MB (mínimo: {self.min_free_memory_mb}MB)"
-            logging.error(error_msg)
-            raise MemoryError(error_msg)
+            raise MemoryError(f"Memória livre insuficiente: {info['free_memory_mb']:.0f}MB (mínimo: {self.min_free_memory_mb}MB)")
         
         return True
     
-    def cleanup(self):
-        # Logar estado antes da limpeza
-        logging.debug("Iniciando limpeza de memória...")
-        before = self.get_memory_info()
-        
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            
-        # Logar estado após limpeza
-        after = self.get_memory_info()
-        freed_mb = before['process_memory_mb'] - after['process_memory_mb']
-        logging.debug(f"Limpeza concluída. Memória liberada: {freed_mb:.1f}MB")
-
     @contextmanager
     def monitor(self):
-        """Context manager para monitorar e gerenciar memória"""
         try:
             self.check_memory()
             yield
         finally:
             self.cleanup()
+    
+    def cleanup(self):
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 class ResourceGuard:
     def __init__(self, memory_manager, max_retries=3, retry_delay=5):
@@ -225,117 +160,11 @@ class RRDBNet(torch.nn.Module):
         out = self.conv_last(self.lrelu(self.conv_hr(feat)))
         return out
 
-def split_tensor(tensor, max_size=500000):  # Reduzido de 1000000 para 500000
-    """Divide o tensor em partes menores se necessário"""
-    _, _, height, width = tensor.shape
-    if height * width <= max_size:
-        return [tensor]
-    
-    # Calcular número de divisões necessárias
-    total_pixels = height * width
-    num_splits = math.ceil(total_pixels / max_size)
-    
-    logging.debug(f"Dividindo tensor de {height}x{width} em {num_splits} partes")
-    
-    # Dividir em partes verticais
-    splits = []
-    split_height = height // num_splits
-    
-    for i in range(num_splits):
-        start = i * split_height
-        end = start + split_height if i < num_splits - 1 else height
-        part = tensor[:, :, start:end, :]
-        logging.debug(f"Parte {i+1}: shape={part.shape}")
-        splits.append(part)
-    
-    return splits
-
-def process_with_timeout(model, tensor, timeout=300):
-    """Processa o tensor com timeout mais agressivo"""
-    import threading
-    import _thread
-    from queue import Queue
-    import time
-    
-    result_queue = Queue()
-    error_queue = Queue()
-    processing_done = threading.Event()
-    
-    def process_worker():
-        try:
-            with torch.no_grad():
-                start_time = time.time()
-                result = model(tensor)
-                processing_time = time.time() - start_time
-                logging.debug(f"Processamento levou {processing_time:.2f} segundos")
-                result_queue.put(result)
-        except Exception as e:
-            error_queue.put(e)
-        finally:
-            processing_done.set()
-    
-    thread = threading.Thread(target=process_worker)
-    thread.daemon = True  # Permite que a thread seja terminada quando o programa principal terminar
-    thread.start()
-    
-    # Aguardar com timeout
-    if not processing_done.wait(timeout):
-        error_msg = f"Timeout após {timeout} segundos durante inferência do modelo"
-        logging.error(error_msg)
-        
-        # Forçar limpeza de memória
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            
-        # Forçar término do programa
-        logging.critical("Forçando término do programa devido a timeout")
-        _thread.interrupt_main()
-        raise TimeoutError(error_msg)
-    
-    if not error_queue.empty():
-        raise error_queue.get()
-        
-    if result_queue.empty():
-        raise RuntimeError("Processo terminou sem resultado e sem erro")
-        
-    return result_queue.get()
-
-
 def setup_logging():
-    """Configura o sistema de logging com saída para arquivo e console"""
-    # Criar o diretório de logs se não existir
-    log_dir = Path('logs')
-    log_dir.mkdir(exist_ok=True)
-    
-    # Nome do arquivo de log com timestamp
-    timestamp = time.strftime('%Y%m%d_%H%M%S')
-    log_file = log_dir / f'upscaler_{timestamp}.log'
-    
-    # Configurar formato detalhado para o log
-    file_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - [%(processName)s:%(threadName)s] - %(message)s'
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
     )
-    
-    # Handler para arquivo
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(file_formatter)
-    file_handler.setLevel(logging.DEBUG)
-    
-    # Handler para console
-    console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(console_formatter)
-    console_handler.setLevel(logging.INFO)
-    
-    # Configurar o logger root
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
-    root_logger.addHandler(file_handler)
-    root_logger.addHandler(console_handler)
-    
-    logging.info(f"Log detalhado será gravado em: {log_file}")
-
 
 def download_model(url, model_path):
     if not os.path.exists(model_path):
@@ -405,45 +234,18 @@ def should_process_image(image_path, min_size_kb, max_size_kb):
         
     return True
 
-
 def get_system_info():
     """Retorna informações detalhadas do sistema"""
     process = psutil.Process(os.getpid())
     system = psutil.virtual_memory()
-    
-    # Informações de CPU
-    cpu_freq = psutil.cpu_freq()
-    cpu_freq_info = f"{cpu_freq.current:.1f}MHz" if cpu_freq else "N/A"
-    
-    # Informações de disco
-    disk = psutil.disk_usage('/')
-    
-    # Informações de rede (bytes enviados/recebidos)
-    net = psutil.net_io_counters()
-    
     return {
-        'process': {
-            'memory_used_mb': process.memory_info().rss / (1024 * 1024),
-            'memory_percent': process.memory_percent(),
-            'cpu_percent': process.cpu_percent(),
-            'threads': process.num_threads(),
-            'open_files': len(process.open_files()),
-            'status': process.status()
-        },
-        'system': {
-            'memory_total_gb': system.total / (1024**3),
-            'memory_available_gb': system.available / (1024**3),
-            'memory_percent': system.percent,
-            'cpu_count': psutil.cpu_count(),
-            'cpu_freq': cpu_freq_info,
-            'cpu_percent': psutil.cpu_percent(interval=1),
-            'disk_usage_percent': disk.percent,
-            'disk_free_gb': disk.free / (1024**3),
-            'net_sent_mb': net.bytes_sent / (1024 * 1024),
-            'net_recv_mb': net.bytes_recv / (1024 * 1024)
-        }
+        'memory_used': process.memory_info().rss / 1024 / 1024,  # MB
+        'memory_percent': process.memory_percent(),
+        'system_memory_percent': system.percent,
+        'cpu_percent': process.cpu_percent(),
+        'system_cpu_percent': psutil.cpu_percent(),
+        'threads': process.num_threads()
     }
-
 
 def check_resources(memory_limit=70):
     """Verifica se há recursos disponíveis para continuar"""
@@ -469,131 +271,83 @@ def wait_for_resources(memory_limit=70, check_interval=5):
             torch.cuda.empty_cache()  # Limpar cache CUDA
         time.sleep(check_interval)
 
-
-def log_system_status(level=logging.DEBUG):
+def log_system_status():
     """Loga status detalhado do sistema"""
     info = get_system_info()
-    
-    logging.log(level, "\nStatus Detalhado do Sistema:")
-    logging.log(level, "Processo:")
-    logging.log(level, f"- RAM Utilizada: {info['process']['memory_used_mb']:.1f}MB")
-    logging.log(level, f"- RAM %: {info['process']['memory_percent']:.1f}%")
-    logging.log(level, f"- CPU %: {info['process']['cpu_percent']:.1f}%")
-    logging.log(level, f"- Threads: {info['process']['threads']}")
-    logging.log(level, f"- Arquivos Abertos: {info['process']['open_files']}")
-    logging.log(level, f"- Status: {info['process']['status']}")
-    
-    logging.log(level, "\nSistema:")
-    logging.log(level, f"- RAM Total: {info['system']['memory_total_gb']:.1f}GB")
-    logging.log(level, f"- RAM Disponível: {info['system']['memory_available_gb']:.1f}GB")
-    logging.log(level, f"- RAM Uso %: {info['system']['memory_percent']:.1f}%")
-    logging.log(level, f"- CPUs: {info['system']['cpu_count']}")
-    logging.log(level, f"- CPU Freq: {info['system']['cpu_freq']}")
-    logging.log(level, f"- CPU %: {info['system']['cpu_percent']:.1f}%")
-    logging.log(level, f"- Disco Uso %: {info['system']['disk_usage_percent']:.1f}%")
-    logging.log(level, f"- Disco Livre: {info['system']['disk_free_gb']:.1f}GB")
-    logging.log(level, f"- Rede Enviado: {info['system']['net_sent_mb']:.1f}MB")
-    logging.log(level, f"- Rede Recebido: {info['system']['net_recv_mb']:.1f}MB")
+    logging.info(
+        f"Status do Sistema:\n"
+        f"- RAM Processo: {info['memory_used']:.1f}MB ({info['memory_percent']:.1f}%)\n"
+        f"- RAM Sistema: {info['system_memory_percent']:.1f}%\n"
+        f"- CPU Processo: {info['cpu_percent']:.1f}%\n"
+        f"- CPU Sistema: {info['system_cpu_percent']:.1f}%\n"
+        f"- Threads: {info['threads']}"
+    )
 
 def process_image(input_path, model, device, target_dpi=300, target_width_mm=None, worker_id=None, memory_manager=None):
     worker_info = f"[Worker {worker_id}] " if worker_id is not None else ""
     guard = ResourceGuard(memory_manager)
     
     try:
-        with system_monitoring(interval=5):
-            logging.debug(f"{worker_info}Iniciando processamento da imagem {input_path}")
+        with guard.guard("carregamento da imagem"):
+            img = Image.open(input_path)
+            original_width, original_height = img.size
             
-            with guard.guard("carregamento da imagem"):
-                logging.debug(f"{worker_info}Carregando imagem...")
-                img = Image.open(input_path)
-                original_width, original_height = img.size
-                logging.debug(f"{worker_info}Imagem carregada: {original_width}x{original_height}")
-                
-                # Redimensionar previamente se necessário
-                max_dimension = 2000
-                if original_width > max_dimension or original_height > max_dimension:
-                    ratio = min(max_dimension/original_width, max_dimension/original_height)
-                    new_width = int(original_width * ratio)
-                    new_height = int(original_height * ratio)
-                    logging.debug(f"{worker_info}Redimensionando de {original_width}x{original_height} para {new_width}x{new_height}")
-                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                
-                logging.debug(f"{worker_info}Convertendo para RGB...")
-                img = img.convert('RGB')
-                
-                # Converter para tensor
-                logging.debug(f"{worker_info}Convertendo imagem para tensor...")
-                img_array = np.array(img)
-                logging.debug(f"{worker_info}Array numpy criado")
-                img = None  # Liberar memória original
-                
-                img_tensor = torch.from_numpy(img_array).float() / 255.0
-                logging.debug(f"{worker_info}Tensor criado")
-                img_array = None
-                
-                img_tensor = img_tensor.permute(2, 0, 1).unsqueeze(0).to(device)
-                logging.debug(f"{worker_info}Tensor movido para {device}")
+            # Redimensionar previamente se necessário
+            max_dimension = 2000
+            if original_width > max_dimension or original_height > max_dimension:
+                ratio = min(max_dimension/original_width, max_dimension/original_height)
+                new_width = int(original_width * ratio)
+                new_height = int(original_height * ratio)
+                img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
             
-            # Processar em partes se necessário
-            tensor_parts = split_tensor(img_tensor)
-            logging.debug(f"{worker_info}Imagem dividida em {len(tensor_parts)} partes para processamento")
-            img_tensor = None  # Liberar memória do tensor original
+            img = img.convert('RGB')
             
-            outputs = []
-            for i, part in enumerate(tensor_parts):
-                logging.debug(f"{worker_info}Processando parte {i+1}/{len(tensor_parts)}")
-                try:
-                    output = process_with_timeout(model, part, timeout=300)  # 5 minutos timeout
-                    outputs.append(output)
-                    logging.debug(f"{worker_info}Parte {i+1} processada com sucesso")
-                    part = None  # Liberar memória da parte processada
-                except TimeoutError as e:
-                    logging.error(f"{worker_info}Timeout no processamento da parte {i+1}")
-                    raise
+        with guard.guard("processamento do modelo"):
+            # Converter para tensor com controle de memória
+            img_array = np.array(img)
+            img = None  # Liberar memória original
             
-            # Combinar resultados se necessário
-            if len(outputs) > 1:
-                logging.debug(f"{worker_info}Combinando {len(outputs)} partes...")
-                output = torch.cat(outputs, dim=2)  # Concatenar na dimensão da altura
-            else:
-                output = outputs[0]
-            outputs = None  # Liberar memória da lista de outputs
+            img_tensor = torch.from_numpy(img_array).float() / 255.0
+            img_array = None
+            
+            img_tensor = img_tensor.permute(2, 0, 1).unsqueeze(0).to(device)
+            
+            # Processar com o modelo
+            with torch.no_grad():
+                output = model(img_tensor)
+            
+            img_tensor = None
             
             # Converter resultado
-            logging.debug(f"{worker_info}Convertendo resultado...")
             output = output.squeeze().float().cpu().clamp_(0, 1).numpy()
             output = (output * 255.0).round().astype(np.uint8)
             output = np.transpose(output, (1, 2, 0))
             
-            with guard.guard("salvamento da imagem"):
-                logging.debug(f"{worker_info}Criando imagem final...")
-                # Criar imagem final
-                output_img = Image.fromarray(output)
-                output = None  # Liberar memória do array
-                
-                if target_width_mm:
-                    target_width_inches = target_width_mm / 25.4
-                    target_width_pixels = int(target_width_inches * target_dpi)
-                    ratio = original_height / original_width
-                    target_height_pixels = int(target_width_pixels * ratio)
-                    logging.debug(f"{worker_info}Redimensionando para {target_width_pixels}x{target_height_pixels}")
-                    output_img = output_img.resize((target_width_pixels, target_height_pixels), 
-                                                 Image.Resampling.LANCZOS)
-                
-                # Backup e salvamento
-                logging.debug(f"{worker_info}Criando backup...")
-                backup_image(input_path)
-                logging.debug(f"{worker_info}Salvando imagem processada...")
-                output_img.save(str(input_path), dpi=(target_dpi, target_dpi))
-                logging.debug(f"{worker_info}Imagem salva com sucesso")
+        with guard.guard("salvamento da imagem"):
+            # Criar imagem final
+            output_img = Image.fromarray(output)
+            output = None
             
-            return True
+            if target_width_mm:
+                target_width_inches = target_width_mm / 25.4
+                target_width_pixels = int(target_width_inches * target_dpi)
+                ratio = original_height / original_width
+                target_height_pixels = int(target_width_pixels * ratio)
+                output_img = output_img.resize((target_width_pixels, target_height_pixels), 
+                                             Image.Resampling.LANCZOS)
+            
+            # Backup e salvamento
+            backup_image(input_path)
+            output_img.save(str(input_path), dpi=(target_dpi, target_dpi))
+            
+        return True
         
     except Exception as e:
         logging.error(f"{worker_info}Erro ao processar {input_path}: {str(e)}")
         import traceback
         logging.error(traceback.format_exc())
         return False
+
 
 def main():
     setup_logging()
@@ -614,8 +368,8 @@ def main():
                         help='DPI desejado para a imagem de saída. Padrão: 300')
     parser.add_argument('--width', type=float,
                         help='Largura desejada em milímetros (mantém proporção)')
-    parser.add_argument('--memory-limit', type=float, default=70,
-                    help='Limite de uso de memória em porcentagem. Padrão: 70')
+    parser.add_argument('--memory-limit', type=float, default=60,
+                    help='Limite de uso de memória em porcentagem. Padrão: 60')
     parser.add_argument('--batch-size', type=int, default=1,
                     help='Número de imagens processadas por vez na GPU. Padrão: 1')
 
@@ -721,3 +475,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

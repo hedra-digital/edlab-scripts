@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import argparse
 import os
 import shutil
@@ -16,11 +15,11 @@ import time
 import sys
 import math
 import signal
-import threading
-from queue import Queue
+import multiprocessing as mp
+from multiprocessing import Pool
+from functools import partial
 from contextlib import contextmanager
-from concurrent.futures import ThreadPoolExecutor, as_completed 
-
+import threading
 
 class SystemMonitor:
     def __init__(self, interval=5):
@@ -225,32 +224,75 @@ class RRDBNet(torch.nn.Module):
         out = self.conv_last(self.lrelu(self.conv_hr(feat)))
         return out
 
-def split_tensor(tensor, max_size=500000):  # Reduzido de 1000000 para 500000
-    """Divide o tensor em partes menores se necessário"""
+
+def process_tensor_part(part_data, model_path, device, scale):
+    """
+    Função otimizada para processar parte do tensor
+    Com tratamento de erros e logs mais detalhados
+    """
+    try:
+        # Log detalhado de início de processamento
+        pid = os.getpid()
+        logging.debug(f"[Processo {pid}] Iniciando processamento")
+        logging.debug(f"[Processo {pid}] Tamanho da parte: {part_data.shape}")
+        
+        # Carregar modelo de forma mais eficiente
+        model = RRDBNet(scale=scale)
+        
+        # Usar carregamento mais robusto do estado do modelo
+        state_dict = torch.load(model_path, map_location=torch.device(device))
+        model_state = state_dict.get('params_ema', 
+                     state_dict.get('params', 
+                     state_dict))
+        model.load_state_dict(model_state)
+        
+        model.eval()
+        model = model.to(device)
+        
+        # Conversão e processamento
+        part_tensor = torch.from_numpy(part_data).to(device)
+        
+        # Processamento com tempo limite mais flexível
+        with torch.no_grad():
+            start_time = time.time()
+            output = model(part_tensor)
+            processing_time = time.time() - start_time
+            
+            logging.debug(f"[Processo {pid}] Processamento concluído em {processing_time:.2f} segundos")
+            
+            return output.cpu().numpy()
+        
+    except Exception as e:
+        # Log de erro mais detalhado
+        logging.error(f"[Processo {pid}] Erro crítico no processamento: {str(e)}")
+        import traceback
+        logging.error(traceback.format_exc())
+        raise
+
+
+def split_tensor(tensor, max_splits=5):
+    """Divide o tensor em menos partes, com processamento mais eficiente"""
     _, _, height, width = tensor.shape
-    if height * width <= max_size:
-        return [tensor]
     
-    # Calcular número de divisões necessárias
+    # Calcular número de divisões, limitando ao máximo especificado
     total_pixels = height * width
-    num_splits = math.ceil(total_pixels / max_size)
+    max_pixels_per_part = total_pixels // max_splits
     
-    logging.debug(f"Dividindo tensor de {height}x{width} em {num_splits} partes")
+    logging.debug(f"Dividindo tensor de {height}x{width}")
     
-    # Dividir em partes verticais
     splits = []
-    split_height = height // num_splits
-    
-    for i in range(num_splits):
-        start = i * split_height
-        end = start + split_height if i < num_splits - 1 else height
-        part = tensor[:, :, start:end, :]
+    for i in range(max_splits):
+        start_row = i * (height // max_splits)
+        end_row = start_row + (height // max_splits) if i < max_splits - 1 else height
+        
+        part = tensor[:, :, start_row:end_row, :]
         logging.debug(f"Parte {i+1}: shape={part.shape}")
         splits.append(part)
     
     return splits
 
-def process_with_timeout(model, tensor, timeout=300):
+
+def process_with_timeout(model, tensor, timeout=600):
     """Processa o tensor com timeout mais agressivo"""
     import threading
     import _thread
@@ -495,102 +537,89 @@ def log_system_status(level=logging.DEBUG):
     logging.log(level, f"- Rede Enviado: {info['system']['net_sent_mb']:.1f}MB")
     logging.log(level, f"- Rede Recebido: {info['system']['net_recv_mb']:.1f}MB")
 
-def process_image(input_path, model, device, target_dpi=300, target_width_mm=None, worker_id=None, memory_manager=None):
-    worker_info = f"[Worker {worker_id}] " if worker_id is not None else ""
-    guard = ResourceGuard(memory_manager)
-    
+
+def process_image(input_path, model_path, device, scale, target_dpi=300, target_width_mm=None, num_processes=None):
+    """
+    Função de processamento de imagem com melhorias de robustez
+    """
     try:
-        with system_monitoring(interval=5):
-            logging.debug(f"{worker_info}Iniciando processamento da imagem {input_path}")
+        # Configurações de processamento
+        if num_processes is None:
+            num_processes = max(1, mp.cpu_count() - 1)
+        
+        logging.info(f"Iniciando processamento com {num_processes} processos")
+        
+        # Carregamento e preparação da imagem com mais tratamentos
+        logging.debug("Carregando imagem...")
+        img = Image.open(input_path).convert('RGB')
+        original_width, original_height = img.size
+        logging.debug(f"Imagem carregada: {original_width}x{original_height}")
+        
+        # Redimensionamento adaptativo
+        max_dimension = 2000  # Aumentado para permitir imagens maiores
+        if original_width > max_dimension or original_height > max_dimension:
+            ratio = min(max_dimension/original_width, max_dimension/original_height)
+            new_width = int(original_width * ratio)
+            new_height = int(original_height * ratio)
+            logging.debug(f"Redimensionando para {new_width}x{new_height}")
+            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        # Conversão para tensor
+        img_array = np.array(img).astype(np.float32) / 255.0
+        img_tensor = torch.from_numpy(img_array).permute(2, 0, 1).unsqueeze(0)
+        
+        # Divisão de tensor com menos partes
+        parts = split_tensor(img_tensor)
+        
+        # Conversão de partes para processamento
+        parts_data = [part.cpu().numpy() for part in parts]
+        
+        # Processamento em pool com timeout
+        logging.info("Iniciando processamento em paralelo...")
+        with Pool(processes=num_processes) as pool:
+            process_func = partial(process_tensor_part, 
+                                   model_path=str(model_path),
+                                   device=device,
+                                   scale=scale)
             
-            with guard.guard("carregamento da imagem"):
-                logging.debug(f"{worker_info}Carregando imagem...")
-                img = Image.open(input_path)
-                original_width, original_height = img.size
-                logging.debug(f"{worker_info}Imagem carregada: {original_width}x{original_height}")
-                
-                # Redimensionar previamente se necessário
-                max_dimension = 2000
-                if original_width > max_dimension or original_height > max_dimension:
-                    ratio = min(max_dimension/original_width, max_dimension/original_height)
-                    new_width = int(original_width * ratio)
-                    new_height = int(original_height * ratio)
-                    logging.debug(f"{worker_info}Redimensionando de {original_width}x{original_height} para {new_width}x{new_height}")
-                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                
-                logging.debug(f"{worker_info}Convertendo para RGB...")
-                img = img.convert('RGB')
-                
-                # Converter para tensor
-                logging.debug(f"{worker_info}Convertendo imagem para tensor...")
-                img_array = np.array(img)
-                logging.debug(f"{worker_info}Array numpy criado")
-                img = None  # Liberar memória original
-                
-                img_tensor = torch.from_numpy(img_array).float() / 255.0
-                logging.debug(f"{worker_info}Tensor criado")
-                img_array = None
-                
-                img_tensor = img_tensor.permute(2, 0, 1).unsqueeze(0).to(device)
-                logging.debug(f"{worker_info}Tensor movido para {device}")
-            
-            # Processar em partes se necessário
-            tensor_parts = split_tensor(img_tensor)
-            logging.debug(f"{worker_info}Imagem dividida em {len(tensor_parts)} partes para processamento")
-            img_tensor = None  # Liberar memória do tensor original
-            
+            # Processamento com coleta de resultados
             outputs = []
-            for i, part in enumerate(tensor_parts):
-                logging.debug(f"{worker_info}Processando parte {i+1}/{len(tensor_parts)}")
-                try:
-                    output = process_with_timeout(model, part, timeout=300)  # 5 minutos timeout
-                    outputs.append(output)
-                    logging.debug(f"{worker_info}Parte {i+1} processada com sucesso")
-                    part = None  # Liberar memória da parte processada
-                except TimeoutError as e:
-                    logging.error(f"{worker_info}Timeout no processamento da parte {i+1}")
-                    raise
-            
-            # Combinar resultados se necessário
-            if len(outputs) > 1:
-                logging.debug(f"{worker_info}Combinando {len(outputs)} partes...")
-                output = torch.cat(outputs, dim=2)  # Concatenar na dimensão da altura
-            else:
-                output = outputs[0]
-            outputs = None  # Liberar memória da lista de outputs
-            
-            # Converter resultado
-            logging.debug(f"{worker_info}Convertendo resultado...")
-            output = output.squeeze().float().cpu().clamp_(0, 1).numpy()
-            output = (output * 255.0).round().astype(np.uint8)
-            output = np.transpose(output, (1, 2, 0))
-            
-            with guard.guard("salvamento da imagem"):
-                logging.debug(f"{worker_info}Criando imagem final...")
-                # Criar imagem final
-                output_img = Image.fromarray(output)
-                output = None  # Liberar memória do array
-                
-                if target_width_mm:
-                    target_width_inches = target_width_mm / 25.4
-                    target_width_pixels = int(target_width_inches * target_dpi)
-                    ratio = original_height / original_width
-                    target_height_pixels = int(target_width_pixels * ratio)
-                    logging.debug(f"{worker_info}Redimensionando para {target_width_pixels}x{target_height_pixels}")
-                    output_img = output_img.resize((target_width_pixels, target_height_pixels), 
-                                                 Image.Resampling.LANCZOS)
-                
-                # Backup e salvamento
-                logging.debug(f"{worker_info}Criando backup...")
-                backup_image(input_path)
-                logging.debug(f"{worker_info}Salvando imagem processada...")
-                output_img.save(str(input_path), dpi=(target_dpi, target_dpi))
-                logging.debug(f"{worker_info}Imagem salva com sucesso")
-            
-            return True
+            for i, result in enumerate(pool.imap(process_func, parts_data), 1):
+                logging.info(f"Parte {i}/{len(parts_data)} processada")
+                outputs.append(result)
+        
+        # Combinação de resultados
+        logging.debug("Combinando resultados...")
+        output = np.concatenate(outputs, axis=2) if len(outputs) > 1 else outputs[0]
+        
+        # Pós-processamento da imagem
+        output = output.squeeze().transpose(1, 2, 0)
+        output = (output * 255.0).round().astype(np.uint8)
+        
+        output_img = Image.fromarray(output)
+        
+        # Redimensionamento final opcional
+        if target_width_mm:
+            target_width_inches = target_width_mm / 25.4
+            target_width_pixels = int(target_width_inches * target_dpi)
+            ratio = original_height / original_width
+            target_height_pixels = int(target_width_pixels * ratio)
+            logging.debug(f"Redimensionando para: {target_width_pixels}x{target_height_pixels}")
+            output_img = output_img.resize((target_width_pixels, target_height_pixels), 
+                                           Image.Resampling.LANCZOS)
+        
+        # Salvamento com backup
+        backup_path = Path('./old_images')
+        backup_path.mkdir(exist_ok=True)
+        shutil.copy2(str(input_path), str(backup_path / input_path.name))
+        
+        output_img.save(str(input_path), dpi=(target_dpi, target_dpi))
+        logging.info("Processamento concluído com sucesso")
+        
+        return True
         
     except Exception as e:
-        logging.error(f"{worker_info}Erro ao processar {input_path}: {str(e)}")
+        logging.error(f"Erro no processamento de {input_path}: {str(e)}")
         import traceback
         logging.error(traceback.format_exc())
         return False
@@ -606,38 +635,42 @@ def main():
                         help='Tamanho mínimo da KB da imagem a ser processada')
     parser.add_argument('-M', '--max-size', type=float, default=0,
                         help='Tamanho máximo da KB da imagem a ser processada')
-    parser.add_argument('-w', '--workers', type=int, default=4,
-                        help='Número de threads de processamento paralelo (padrão: 4). '
-                             'Aumentar pode melhorar a velocidade em CPUs multi-core, '
-                             'mas também aumenta o consumo de memória')
+    parser.add_argument('-w', '--workers', type=int, default=2,
+                        help='Número de processos em paralelo (padrão: 2)')
     parser.add_argument('--dpi', type=int, default=300,
                         help='DPI desejado para a imagem de saída. Padrão: 300')
     parser.add_argument('--width', type=float,
                         help='Largura desejada em milímetros (mantém proporção)')
     parser.add_argument('--memory-limit', type=float, default=70,
-                    help='Limite de uso de memória em porcentagem. Padrão: 70')
+                        help='Limite de uso de memória em porcentagem. Padrão: 70')
     parser.add_argument('--batch-size', type=int, default=1,
-                    help='Número de imagens processadas por vez na GPU. Padrão: 1')
+                        help='Número de imagens processadas por vez na GPU. Padrão: 1')
 
     args = parser.parse_args()
     
     logging.info(f"Iniciando com {args.workers} worker(s)")
-    log_system_status()
     
     # Limitar número de threads do PyTorch
     torch.set_num_threads(args.workers)
     logging.info(f"Threads do PyTorch limitadas a {args.workers}")
     
-    # Inicializar o modelo
-    logging.info(f"Inicializando o modelo Real-ESRGAN (escala {args.scale}x)...")
-    model, device = setup_model(args.scale)
-    logging.info(f"Modelo inicializado no dispositivo: {device}")
+    # Definir caminhos dos modelos
+    models_dir = Path(__file__).parent / 'models'
+    models_dir.mkdir(parents=True, exist_ok=True)
     
-    # Inicializar gerenciador de memória
-    memory_manager = MemoryManager(
-        memory_limit_percent=args.memory_limit,
-        min_free_memory_mb=1000  # Garante pelo menos 1GB livre
-    )
+    if args.scale == 2:
+        model_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x2plus.pth'
+        model_path = models_dir / 'RealESRGAN_x2plus.pth'
+    else:  # scale 4
+        model_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth'
+        model_path = models_dir / 'RealESRGAN_x4plus.pth'
+    
+    # Baixar modelo se necessário
+    if not model_path.exists():
+        download_model(model_url, model_path)
+    
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    logging.info(f"Modelo inicializado no dispositivo: {device}")
     
     # Coletar caminhos das imagens
     image_paths = []
@@ -675,40 +708,30 @@ def main():
     successful = 0
     
     try:
-        with ThreadPoolExecutor(max_workers=args.workers) as executor:
-            futures = []
-            
-            for i, img_path in enumerate(valid_images, 1):
-                try:
-                    with memory_manager.monitor():
-                        size_kb = os.path.getsize(img_path) / 1024
-                        logging.info(f"Enfileirando imagem {i}/{total}: {img_path.name} ({size_kb:.1f}KB)")
-                        future = executor.submit(
-                            process_image, 
-                            img_path, 
-                            model, 
-                            device,
-                            args.dpi,
-                            args.width,
-                            i % args.workers,
-                            memory_manager
-                        )
-                        futures.append(future)
-                except MemoryError as e:
-                    logging.error(f"Memória insuficiente para processar {img_path}: {str(e)}")
-                    continue
+        for i, img_path in enumerate(valid_images, 1):
+            try:
+                size_kb = os.path.getsize(img_path) / 1024
+                logging.info(f"Processando imagem {i}/{total}: {img_path.name} ({size_kb:.1f}KB)")
                 
-            for future in as_completed(futures):
-                try:
-                    if future.result():
-                        successful += 1
-                except Exception as e:
-                    logging.error(f"Erro no processamento: {str(e)}")
+                success = process_image(
+                    img_path,
+                    model_path,
+                    device,
+                    args.scale,
+                    args.dpi,
+                    args.width,
+                    num_processes=args.workers
+                )
+                
+                if success:
+                    successful += 1
                     
+            except Exception as e:
+                logging.error(f"Erro ao processar {img_path}: {str(e)}")
+                continue
+                
     except KeyboardInterrupt:
         logging.info("\nInterrompendo processamento...")
-        executor._threads.clear()
-        concurrent.futures.thread._threads_queues.clear()
         sys.exit(1)
     
     logging.info(f"\nProcessamento concluído!")
@@ -720,4 +743,6 @@ def main():
     logging.info(f"- Total de imagens encontradas: {len(image_paths)}")
 
 if __name__ == '__main__':
+    # Necessário para multiprocessing no Windows
+    mp.freeze_support()
     main()
