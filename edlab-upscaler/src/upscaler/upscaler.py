@@ -10,6 +10,10 @@ from PIL import Image
 import numpy as np
 import urllib.request
 import ssl
+import gc
+import psutil
+import time
+
 
 class RDBLayer(torch.nn.Module):
     def __init__(self, nc):
@@ -215,6 +219,173 @@ def process_image(input_path, model, device, target_dpi=300, target_width_mm=Non
         logging.error(f"Erro ao processar {input_path}: {str(e)}")
         return False
 
+
+def get_system_info():
+    """Retorna informações detalhadas do sistema"""
+    process = psutil.Process(os.getpid())
+    system = psutil.virtual_memory()
+    return {
+        'memory_used': process.memory_info().rss / 1024 / 1024,  # MB
+        'memory_percent': process.memory_percent(),
+        'system_memory_percent': system.percent,
+        'cpu_percent': process.cpu_percent(),
+        'system_cpu_percent': psutil.cpu_percent(),
+        'threads': process.num_threads()
+    }
+
+def check_resources():
+    """Verifica se há recursos disponíveis para continuar"""
+    info = get_system_info()
+    
+    # Verificar CPU (limite de 60%)
+    if info['system_cpu_percent'] > 60:
+        logging.warning("CPU acima de 60%. Aguardando...")
+        return False
+        
+    # Verificar memória (limite de 70% do sistema)
+    if info['system_memory_percent'] > 70:
+        logging.warning("Memória do sistema acima de 70%. Aguardando...")
+        return False
+    
+    # Verificar memória do processo (limite de 2GB)
+    if info['memory_used'] > 2048:  # 2GB em MB
+        logging.warning("Processo usando mais de 2GB. Aguardando...")
+        return False
+        
+    return True
+
+def wait_for_resources(check_interval=5):
+    """Aguarda até que os recursos estejam disponíveis"""
+    while not check_resources():
+        gc.collect()  # Forçar coleta de lixo
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()  # Limpar cache CUDA
+        time.sleep(check_interval)
+
+def log_system_status():
+    """Loga status detalhado do sistema"""
+    info = get_system_info()
+    logging.info(
+        f"Status do Sistema:\n"
+        f"- RAM Processo: {info['memory_used']:.1f}MB ({info['memory_percent']:.1f}%)\n"
+        f"- RAM Sistema: {info['system_memory_percent']:.1f}%\n"
+        f"- CPU Processo: {info['cpu_percent']:.1f}%\n"
+        f"- CPU Sistema: {info['system_cpu_percent']:.1f}%\n"
+        f"- Threads: {info['threads']}"
+    )
+
+
+
+
+def process_image(input_path, model, device, target_dpi=300, target_width_mm=None, worker_id=None):
+    try:
+        worker_info = f"[Worker {worker_id}] " if worker_id is not None else ""
+        
+        # Verificar recursos antes de processar
+        logging.info(f"{worker_info}Verificando recursos do sistema...")
+        wait_for_resources()
+        
+        logging.info(f"{worker_info}Iniciando processamento de {input_path.name}")
+        log_system_status()
+        
+        # Fazer backup da imagem original
+        backup_image(input_path)
+        
+        # Ler a imagem
+        img = Image.open(input_path)
+        original_width, original_height = img.size
+        
+        # Redimensionar previamente se a imagem for muito grande
+        max_dimension = 2000  # limite máximo de dimensão
+        if original_width > max_dimension or original_height > max_dimension:
+            ratio = min(max_dimension/original_width, max_dimension/original_height)
+            new_width = int(original_width * ratio)
+            new_height = int(original_height * ratio)
+            logging.info(f"{worker_info}Redimensionando previamente de {original_width}x{original_height} para {new_width}x{new_height}")
+            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        img = img.convert('RGB')
+        logging.info(f"{worker_info}Imagem carregada: {img.size[0]}x{img.size[1]}")
+        
+        # Liberar memória da imagem original após converter para tensor
+        img_array = np.array(img)
+        img = None  # Liberar memória
+        gc.collect()
+        
+        img_tensor = torch.from_numpy(img_array).float() / 255.0
+        img_array = None  # Liberar memória
+        gc.collect()
+        
+        img_tensor = img_tensor.permute(2, 0, 1).unsqueeze(0)
+        img_tensor = img_tensor.to(device)
+        
+        # Processar imagem
+        log_system_status()
+        with torch.no_grad():
+            logging.info(f"{worker_info}Aplicando modelo...")
+            output = model(img_tensor)
+            logging.info(f"{worker_info}Modelo aplicado com sucesso")
+        
+        # Liberar memória do tensor de entrada
+        img_tensor = None
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+        
+        # Converter resultado
+        output = output.squeeze().float().cpu().clamp_(0, 1).numpy()
+        output = (output * 255.0).round().astype(np.uint8)
+        output = np.transpose(output, (1, 2, 0))
+        
+        # Calcular dimensões finais
+        if target_width_mm:
+            target_width_inches = target_width_mm / 25.4
+            target_width_pixels = int(target_width_inches * target_dpi)
+            ratio = original_height / original_width
+            target_height_pixels = int(target_width_pixels * ratio)
+        else:
+            target_width_pixels = output.shape[1]
+            target_height_pixels = output.shape[0]
+        
+        # Criar imagem final e redimensionar
+        output_img = Image.fromarray(output)
+        output = None  # Liberar memória
+        gc.collect()
+        
+        if target_width_pixels != output_img.width:
+            output_img = output_img.resize((target_width_pixels, target_height_pixels), 
+                                         Image.Resampling.LANCZOS)
+        
+        # Salvar resultado
+        output_img.info['dpi'] = (target_dpi, target_dpi)
+        output_img.save(str(input_path), dpi=(target_dpi, target_dpi))
+        
+        logging.info(f"{worker_info}Processamento concluído:")
+        logging.info(f"{worker_info}- Resolução final: {output_img.size[0]}x{output_img.size[1]} @ {target_dpi} DPI")
+        if target_width_mm:
+            logging.info(f"{worker_info}- Tamanho para impressão: {target_width_mm}mm x "
+                        f"{target_width_mm * output_img.size[1] / output_img.size[0]:.1f}mm")
+        
+        # Limpeza final
+        output_img = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
+        log_system_status()
+        return True
+        
+    except Exception as e:
+        logging.error(f"{worker_info}Erro ao processar {input_path}: {str(e)}")
+        import traceback
+        logging.error(traceback.format_exc())
+        return False
+    finally:
+        # Garantir limpeza em caso de erro
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
 def main():
     setup_logging()
     parser = argparse.ArgumentParser(description='EdLab Upscale - Aumentar resolução de imagens usando Real-ESRGAN')
@@ -232,12 +403,24 @@ def main():
                         help='DPI desejado para a imagem de saída. Padrão: 300')
     parser.add_argument('--width', type=float,
                         help='Largura desejada em milímetros (mantém proporção)')
+    parser.add_argument('--memory-limit', type=float, default=70,
+                    help='Limite de uso de memória em porcentagem. Padrão: 70')
+    parser.add_argument('--batch-size', type=int, default=1,
+                    help='Número de imagens processadas por vez na GPU. Padrão: 1')
     
     args = parser.parse_args()
+    
+    logging.info(f"Iniciando com {args.workers} worker(s)")
+    log_system_status()
+    
+    # Limitar número de threads do PyTorch
+    torch.set_num_threads(args.workers)
+    logging.info(f"Threads do PyTorch limitadas a {args.workers}")
     
     # Inicializar o modelo
     logging.info(f"Inicializando o modelo Real-ESRGAN (escala {args.scale}x)...")
     model, device = setup_model(args.scale)
+    logging.info(f"Modelo inicializado no dispositivo: {device}")
     
     # Coletar caminhos das imagens
     image_paths = []
@@ -256,32 +439,73 @@ def main():
         logging.error("Nenhuma imagem encontrada para processar!")
         return
     
-    # Processar imagens
-    total = len(image_paths)
-    successful = 0
+    # Filtrar imagens com base no tamanho
+    valid_images = []
     skipped_small = 0
     skipped_large = 0
     
-    for i, img_path in enumerate(image_paths, 1):
+    for img_path in image_paths:
         size_kb = os.path.getsize(img_path) / 1024
         if not should_process_image(img_path, args.min_size, args.max_size):
             if args.min_size and size_kb < args.min_size:
                 skipped_small += 1
             elif args.max_size and size_kb > args.max_size:
                 skipped_large += 1
-            continue
-            
-        logging.info(f"Processando imagem {i}/{total}: {img_path.name} ({size_kb:.1f}KB)")
-        if process_image(img_path, model, device, args.dpi, args.width):
-            successful += 1
-            
+        else:
+            valid_images.append(img_path)
+    
+    total = len(valid_images)
+    successful = 0
+    
+    # Processar imagens com controle de workers e recursos
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    with ThreadPoolExecutor(max_workers=args.workers) as executor:
+        futures = []
+        retry_count = 3  # número de tentativas por imagem
+        
+        for i, img_path in enumerate(valid_images, 1):
+            attempts = 0
+            while attempts < retry_count:
+                try:
+                    # Aguardar recursos disponíveis antes de enfileirar
+                    wait_for_resources()
+                    
+                    size_kb = os.path.getsize(img_path) / 1024
+                    logging.info(f"Enfileirando imagem {i}/{total}: {img_path.name} ({size_kb:.1f}KB)")
+                    future = executor.submit(process_image, img_path, model, device, 
+                                          args.dpi, args.width, i % args.workers)
+                    futures.append(future)
+                    break
+                except Exception as e:
+                    attempts += 1
+                    logging.error(f"Tentativa {attempts} falhou: {str(e)}")
+                    if attempts >= retry_count:
+                        logging.error(f"Falha ao processar {img_path} após {retry_count} tentativas")
+                    else:
+                        time.sleep(5)  # esperar antes de tentar novamente
+                    gc.collect()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+        
+        # Processar resultados com controle de recursos
+        for future in as_completed(futures):
+            try:
+                if future.result():
+                    successful += 1
+                log_system_status()
+                gc.collect()  # Coletar lixo após cada processamento
+            except Exception as e:
+                logging.error(f"Erro no processamento: {str(e)}")
+                logging.error(traceback.format_exc())
+    
     logging.info(f"\nProcessamento concluído!")
     logging.info(f"- Imagens processadas com sucesso: {successful}")
     if args.min_size > 0:
         logging.info(f"- Imagens puladas (menores que {args.min_size}KB): {skipped_small}")
     if args.max_size > 0:
         logging.info(f"- Imagens puladas (maiores que {args.max_size}KB): {skipped_large}")
-    logging.info(f"- Total de imagens encontradas: {total}")
+    logging.info(f"- Total de imagens encontradas: {len(image_paths)}")
 
 if __name__ == '__main__':
     main()
+
