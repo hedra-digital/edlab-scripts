@@ -179,12 +179,9 @@ def get_system_info():
         'threads': process.num_threads()
     }
 
-def check_resources():
+def check_resources(memory_limit=70):
     """Verifica se há recursos disponíveis para continuar"""
     info = get_system_info()
-    
-    # Usar o limite de memória definido pelo usuário
-    memory_limit = args.memory_limit  # Precisa ter acesso aos argumentos aqui
     
     # Verificar CPU (limite de 60%)
     if info['system_cpu_percent'] > 60:
@@ -196,12 +193,11 @@ def check_resources():
         logging.warning(f"Memória do sistema acima de {memory_limit}%. Aguardando...")
         return False
     
-    # Remover limite fixo de 2GB para permitir mais uso de memória
     return True
 
-def wait_for_resources(check_interval=5):
+def wait_for_resources(memory_limit=70, check_interval=5):
     """Aguarda até que os recursos estejam disponíveis"""
-    while not check_resources():
+    while not check_resources(memory_limit):
         gc.collect()  # Forçar coleta de lixo
         if torch.cuda.is_available():
             torch.cuda.empty_cache()  # Limpar cache CUDA
@@ -219,16 +215,13 @@ def log_system_status():
         f"- Threads: {info['threads']}"
     )
 
-
-
-
-def process_image(input_path, model, device, target_dpi=300, target_width_mm=None, worker_id=None):
+def process_image(input_path, model, device, target_dpi=300, target_width_mm=None, worker_id=None, memory_limit=70):
     try:
         worker_info = f"[Worker {worker_id}] " if worker_id is not None else ""
         
         # Verificar recursos antes de processar
         logging.info(f"{worker_info}Verificando recursos do sistema...")
-        wait_for_resources()
+        wait_for_resources(memory_limit)
         
         logging.info(f"{worker_info}Iniciando processamento de {input_path.name}")
         log_system_status()
