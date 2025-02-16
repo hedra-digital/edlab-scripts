@@ -111,15 +111,21 @@ def download_model(url, model_path):
         logging.info("Download concluído")
 
 def setup_model(scale):
-    # Selecionar o modelo apropriado baseado na escala
+    # Definir caminhos dos modelos
+    models_dir = Path(__file__).parent / 'models'
+    
     if scale == 2:
         model_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x2plus.pth'
-        model_path = 'RealESRGAN_x2plus.pth'
+        model_path = models_dir / 'RealESRGAN_x2plus.pth'
     else:  # scale 4
         model_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth'
-        model_path = 'RealESRGAN_x4plus.pth'
+        model_path = models_dir / 'RealESRGAN_x4plus.pth'
     
-    download_model(model_url, model_path)
+    # Baixar modelo apenas se não existir
+    if not model_path.exists():
+        models_dir.mkdir(parents=True, exist_ok=True)
+        logging.info(f"Baixando modelo de {model_url}")
+        download_model(model_url, model_path)
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = RRDBNet(scale=scale)
@@ -215,6 +221,7 @@ def process_image(input_path, model, device, target_dpi=300, target_width_mm=Non
             logging.info(f"Tamanho para impressão: {target_width_mm}mm x {target_width_mm * output_img.size[1] / output_img.size[0]:.1f}mm")
         
         return True
+    
     except Exception as e:
         logging.error(f"Erro ao processar {input_path}: {str(e)}")
         return False
@@ -407,7 +414,7 @@ def main():
                     help='Limite de uso de memória em porcentagem. Padrão: 70')
     parser.add_argument('--batch-size', type=int, default=1,
                     help='Número de imagens processadas por vez na GPU. Padrão: 1')
-    
+
     args = parser.parse_args()
     
     logging.info(f"Iniciando com {args.workers} worker(s)")
