@@ -606,16 +606,16 @@ def main():
                         help='Tamanho mínimo da KB da imagem a ser processada')
     parser.add_argument('-M', '--max-size', type=float, default=0,
                         help='Tamanho máximo da KB da imagem a ser processada')
-    parser.add_argument('-w', '--workers', type=int, default=4,
-                        help='Número de threads de processamento paralelo (padrão: 4). '
+    parser.add_argument('-w', '--workers', type=int, default=3,
+                        help='Número de threads de processamento paralelo (padrão: 3). '
                              'Aumentar pode melhorar a velocidade em CPUs multi-core, '
                              'mas também aumenta o consumo de memória')
     parser.add_argument('--dpi', type=int, default=300,
                         help='DPI desejado para a imagem de saída. Padrão: 300')
     parser.add_argument('--width', type=float,
                         help='Largura desejada em milímetros (mantém proporção)')
-    parser.add_argument('--memory-limit', type=float, default=70,
-                    help='Limite de uso de memória em porcentagem. Padrão: 70')
+    parser.add_argument('--memory-limit', type=float, default=80,
+                    help='Limite de uso de memória em porcentagem. Padrão: 80')
     parser.add_argument('--batch-size', type=int, default=1,
                     help='Número de imagens processadas por vez na GPU. Padrão: 1')
 
