@@ -21,13 +21,21 @@ from queue import Queue
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed 
 
-
 class SystemMonitor:
+    _instance = None
+
     def __init__(self, interval=5):
-        self.interval = interval
-        self.running = False
-        self._thread = None
+        if not hasattr(self, 'initialized'):
+            self.interval = interval
+            self.running = False
+            self._thread = None
+            self.initialized = True
     
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
     def _monitor(self):
         while self.running:
             log_system_status()
@@ -49,8 +57,9 @@ class SystemMonitor:
             self._thread = None
             logging.debug("Monitor de sistema parado")
 
+
 @contextmanager
-def system_monitoring(interval=5):
+def system_monitoring(interval=10):  # Aumentar para 10 segundos
     """Context manager para monitoramento do sistema"""
     monitor = SystemMonitor(interval)
     try:
@@ -257,7 +266,7 @@ class RRDBNet(torch.nn.Module):
         out = self.conv_last(self.lrelu(self.conv_hr(feat)))
         return out
 
-def split_tensor(tensor, max_size=500000):  # Reduzido de 1000000 para 500000
+def split_tensor(tensor, max_size=250000):
     """Divide o tensor em partes menores se necessário"""
     _, _, height, width = tensor.shape
     if height * width <= max_size:
@@ -289,15 +298,16 @@ def process_batch(image_paths, model, device, args, memory_manager):
     active_futures = []
     successful = 0
     
+    # Adicionar throttling baseado em memória
+    max_memory_percent = 75  # Limitar uso total de memória
+
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
         for i, img_path in enumerate(image_paths, 1):
             try:
                 # Aguardar se há muitos processos ativos
-                while len(active_futures) >= args.batch_size:
-                    done, not_done = concurrent.futures.wait(
-                        active_futures,
-                        return_when=concurrent.futures.FIRST_COMPLETED
-                    )
+                while psutil.virtual_memory().percent > max_memory_percent:
+                    time.sleep(5)
+                    memory_manager.force_cleanup()
                     # Processar resultados completos
                     for future in done:
                         try:
@@ -631,10 +641,14 @@ def process_image(input_path, model, device, target_dpi=300, target_width_mm=Non
                 logging.debug(f"{worker_info}Tensor movido para {device}")
             
             # Processar em partes
-            logging.debug(f"{worker_info}Imagem dividida em {len(tensor_parts)} partes para processamento")
-            tensor_parts = split_tensor(img_tensor)
+            tensor_parts = split_tensor(img_tensor)  # Primeiro criar tensor_parts
+            if not tensor_parts:
+                raise ValueError(f"{worker_info}Falha ao dividir o tensor em partes")
+
+
+            logging.debug(f"{worker_info}Imagem dividida em {len(tensor_parts)} partes para processamento")  # Depois usar
             del img_tensor  # Liberar memória do tensor original
-            
+
             outputs = []
             for i, part in enumerate(tensor_parts):
                 logging.debug(f"{worker_info}Processando parte {i+1}/{len(tensor_parts)}")
