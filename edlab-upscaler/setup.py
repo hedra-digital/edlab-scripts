@@ -9,7 +9,8 @@ setup(
         "torch>=2.6.0",
         "torchvision>=0.21.0",
         "numpy>=2.1.3",
-        "Pillow>=11.1.0"
+        "Pillow>=11.1.0",
+        "psutil>=5.9.0"
     ],
     entry_points={
         'console_scripts': [
