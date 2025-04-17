@@ -27,8 +27,10 @@ prepare:
 # Instalar globalmente
 .PHONY: install
 install: deps prepare
+	$(PIPX) uninstall voicing || true
+	rm -rf ~/.local/share/pipx/venvs/voicing || true
 	$(PIPX) install -e . --force
-
+	
 # Desinstalar
 .PHONY: uninstall
 uninstall:

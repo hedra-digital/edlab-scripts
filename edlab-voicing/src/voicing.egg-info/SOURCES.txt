@@ -1,6 +1,8 @@
 README.md
 setup.py
 src/voicing/__init__.py
+src/voicing/_regexp.py
+src/voicing/elevenlabs_integration.py
 src/voicing/pattern_manager.py
 src/voicing/voicing.py
 src/voicing.egg-info/PKG-INFO

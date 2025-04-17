@@ -1,4 +1,4 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: voicing
 Version: 0.1.1
 Summary: Uma ferramenta de linha de comando para síntese de voz
@@ -10,6 +10,13 @@ Requires-Dist: azure-cognitiveservices-speech
 Requires-Dist: edge-tts
 Requires-Dist: gtts
 Requires-Dist: tqdm
+Dynamic: author
+Dynamic: author-email
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
 
 # Text-to-Speech (TTS) Command Line Tool
 Um utilitário de linha de comando para converter texto em fala usando diferentes engines de síntese de voz.
