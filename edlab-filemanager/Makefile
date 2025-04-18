@@ -87,24 +87,37 @@ $(VENV): check-python
 .PHONY: deps
 deps: $(VENV)
 	$(BIN)/pip install --no-cache-dir -r requirements.txt
+	$(BIN)/pip install --no-cache-dir -e .
 
 # Preparar diretórios
 .PHONY: prepare
 prepare:
-	mkdir -p src/filemanager.egg-info
-	chmod -R 777 src/filemanager.egg-info
+	mkdir -p src/edlab_filemanager.egg-info
+	chmod -R 777 src/edlab_filemanager.egg-info
 
-# Instalar globalmente
+# Instalar com pip no lugar de pipx
+.PHONY: install-pip
+install-pip: deps prepare
+	@echo "Instalando com pip em vez de pipx..."
+	$(BIN)/pip install -e .
+	@echo "Instalado! Execute com: $(VENV)/bin/edlab-filemanager"
+
+# Instalar globalmente via pipx
 .PHONY: install
 install: deps prepare check-pipx
-	$(PIPX) uninstall edlab-filemanager || true
-	rm -rf ~/.local/share/pipx/venvs/edlab-filemanager || true
-	$(PIPX) install -e . --force
+	@echo "Removendo instalações anteriores..."
+	-$(PIPX) uninstall edlab-filemanager > /dev/null 2>&1 || true
+	-rm -rf ~/.local/share/pipx/venvs/edlab-filemanager > /dev/null 2>&1 || true
+	@echo "Instalando com pipx..."
+	$(PIPX) install --verbose --force . || $(MAKE) install-pip
 
 # Desinstalar
 .PHONY: uninstall
 uninstall: check-pipx
-	$(PIPX) uninstall edlab-filemanager || true
+	-$(PIPX) uninstall edlab-filemanager > /dev/null 2>&1 || true
+	@echo "Tentando remover symlink manualmente se existir..."
+	-rm -f /usr/local/bin/edlab-filemanager > /dev/null 2>&1 || true
+	-rm -f ~/.local/bin/edlab-filemanager > /dev/null 2>&1 || true
 
 # Limpar arquivos temporários
 .PHONY: clean
