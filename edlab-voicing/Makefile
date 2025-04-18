@@ -1,7 +1,6 @@
 # Variáveis
 PYTHON_VERSION := 3.12
-PYENV := $(shell command -v pyenv 2> /dev/null)
-PYTHON := python$(PYTHON_VERSION)
+PYENV := $(shell which pyenv 2> /dev/null)
 VENV := venv
 BIN := $(VENV)/bin
 PIPX := pipx
@@ -12,30 +11,52 @@ check-python:
 	@echo "Verificando instalação do pyenv e Python $(PYTHON_VERSION)..."
 ifdef PYENV
 	@echo "pyenv encontrado em: $(PYENV)"
-	@if pyenv versions | grep -q $(PYTHON_VERSION); then \
+	
+	# Verificar se a versão está instalada
+	@if $(PYENV) versions | grep -q $(PYTHON_VERSION); then \
 		echo "Python $(PYTHON_VERSION) já está instalado via pyenv"; \
-		pyenv local $(PYTHON_VERSION); \
-		echo "Python $(PYTHON_VERSION) ativado para este projeto"; \
 	else \
 		echo "Python $(PYTHON_VERSION) não encontrado. Instalando..."; \
-		pyenv install $(PYTHON_VERSION); \
-		pyenv local $(PYTHON_VERSION); \
-		echo "Python $(PYTHON_VERSION) instalado e ativado para este projeto"; \
+		$(PYENV) install $(PYTHON_VERSION); \
 	fi
+	
+	# Configurar a versão local
+	$(PYENV) local $(PYTHON_VERSION)
+	
+	# Usar um script shell para garantir que a versão correta seja usada
+	@bash -c 'source ~/.bashrc > /dev/null 2>&1 || true; \
+		PYVER=$$(python3 --version 2>&1 | cut -d" " -f2); \
+		PYMAJOR=$$(echo $$PYVER | cut -d. -f1-2); \
+		echo "Versão Python detectada: $$PYVER ($$PYMAJOR)"; \
+		if [[ "$$PYMAJOR" != "$(PYTHON_VERSION)" ]]; then \
+			echo "AVISO: A versão Python $$PYMAJOR não é $(PYTHON_VERSION)"; \
+			echo "Tentando usar o executável Python específico da versão $(PYTHON_VERSION)..."; \
+		fi'
+	
+	# Assegurar que temos o caminho correto para o Python
+	@PY_CMD=$(shell $(PYENV) which python 2>/dev/null || echo python3)
+	@echo "Usando Python em: $$PY_CMD"
 else
 	@echo "pyenv não encontrado. Por favor instale pyenv primeiro."
 	@echo "Veja instruções em: https://github.com/pyenv/pyenv#installation"
 	@exit 1
 endif
-	@echo "Versão Python ativa: $$(python --version)"
 
 # Alvos padrão
 .PHONY: all
 all: install
 
-# Criar ambiente virtual
+# Criar ambiente virtual - importante: usar o Python do pyenv diretamente
 $(VENV): check-python
-	$$(pyenv which python) -m venv $(VENV)
+	bash -c 'source ~/.bashrc > /dev/null 2>&1 || true; \
+		if command -v $(PYENV) > /dev/null; then \
+			PYTHON_CMD=$$($(PYENV) which python); \
+			echo "Criando ambiente virtual com: $$PYTHON_CMD"; \
+			$$PYTHON_CMD -m venv $(VENV); \
+		else \
+			echo "Usando Python padrão"; \
+			python3 -m venv $(VENV); \
+		fi'
 	$(BIN)/pip install --upgrade pip
 
 # Instalar dependências
