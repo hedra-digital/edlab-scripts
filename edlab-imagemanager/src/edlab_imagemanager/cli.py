@@ -49,7 +49,7 @@ def main():
     parser.add_argument("input", nargs="*", help="Input image file(s) or wildcard pattern")
     parser.add_argument("-i", "--input-dir", help="Input directory for images")
     parser.add_argument("-o", "--output-dir", help="Output directory for processed images")
-    parser.add_argument("-b", "--border-width", type=int, default=1, help="Width of the black border (default: 1)")
+    parser.add_argument("-b", "--border-width", type=int, default=0, help="Width of the black border (default: 0)")
     parser.add_argument("-s", "--square", action="store_true", help="Create a square image with centered content")
     parser.add_argument("--suffix", default="new", help="Suffix for processed images (default: 'new')")
     parser.add_argument("--background-color", default="#E9EAEC", help="Background color in hex format (default: #E9EAEC)")
