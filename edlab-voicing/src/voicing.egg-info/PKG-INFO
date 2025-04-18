@@ -21,6 +21,15 @@ Dynamic: summary
 # Text-to-Speech (TTS) Command Line Tool
 Um utilitário de linha de comando para converter texto em fala usando diferentes engines de síntese de voz.
 
+## Atenção
+
+Ussar python 3.12.9
+
+```
+pyenv install 3.12
+pyenv local 3.12.9
+```
+
 ## 🌟 Características
 
 - Múltiplos engines de síntese de voz:
