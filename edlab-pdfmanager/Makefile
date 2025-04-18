@@ -1,38 +1,97 @@
-install:
-	-sudo cp edlab-pdfmanager /usr/local/bin
-test:
-	echo "=== TESTE 1: cropar, arrancar páginas, remover texto e converter para png ======="
-	./edlab-pdfmanager -i input.pdf -o output1.pdf -p 1-3 -rt -d img -m '10 10 10 10'
-	echo "=== TESTE 2: Juntar pdfs ========================================================"
-	./edlab-pdfmanager -i input.pdf BLANK output1.pdf -j 
-	echo "=== TESTE 3: Juntar pdfs ========================================================"
-	./edlab-pdfmanager -i *.pdf --page-counter
-	echo "=== TESTE 4: Extrair texto de pdfs =============================================="
-	./edlab-pdfmanager -i inputB.pdf --extract-text
-	echo "=== TESTE 5: Colocar uma marca d'água no texto =================================="
-	./edlab-pdfmanager -i sample.pdf --watermark
-	echo "=== TESTE 6: verificar as cores ================================================="
-	./edlab-pdfmanager -i inputB.pdf --check-color
-	echo "=== TESTE 7: contas as páginas =================================================="
-	./edlab-pdfmanager -i inputB.pdf --page-counter
-	echo "=== TESTE 8: shrink ============================================================="
-	./edlab-pdfmanager -i inputB.pdf --shrink
-	echo "=== TESTE 9: convert-to-black ==================================================="
-	./edlab-pdfmanager -i input.pdf --convert-to-black
-	echo "=== TESTE 10: convert-to-gray ==================================================="
-	./edlab-pdfmanager -i input.pdf --convert-to-gray
-	echo "=== TESTE 11: extract-to-docx ==================================================="
-	./edlab-pdfmanager -i inputB.pdf --extract-to-docx
+# Variáveis
+PYTHON_VERSION := 3.12
+PYENV := $(shell which pyenv 2> /dev/null)
+VENV := venv
+BIN := $(VENV)/bin
+PIPX := pipx
 
+# Verificar pyenv e Python 3.12
+.PHONY: check-python
+check-python:
+	@echo "Verificando instalação do pyenv e Python $(PYTHON_VERSION)..."
+ifdef PYENV
+	@echo "pyenv encontrado em: $(PYENV)"
+	
+	# Verificar se a versão está instalada
+	@if $(PYENV) versions | grep -q $(PYTHON_VERSION); then \
+		echo "Python $(PYTHON_VERSION) já está instalado via pyenv"; \
+	else \
+		echo "Python $(PYTHON_VERSION) não encontrado. Instalando..."; \
+		$(PYENV) install $(PYTHON_VERSION); \
+	fi
+	
+	# Configurar a versão local
+	$(PYENV) local $(PYTHON_VERSION)
+	
+	# Usar um script shell para garantir que a versão correta seja usada
+	@bash -c 'source ~/.bashrc > /dev/null 2>&1 || true; \
+		PYVER=$$(python3 --version 2>&1 | cut -d" " -f2); \
+		PYMAJOR=$$(echo $$PYVER | cut -d. -f1-2); \
+		echo "Versão Python detectada: $$PYVER ($$PYMAJOR)"; \
+		if [[ "$$PYMAJOR" != "$(PYTHON_VERSION)" ]]; then \
+			echo "AVISO: A versão Python $$PYMAJOR não é $(PYTHON_VERSION)"; \
+			echo "Tentando usar o executável Python específico da versão $(PYTHON_VERSION)..."; \
+		fi'
+	
+	# Assegurar que temos o caminho correto para o Python
+	@PY_CMD=$(shell $(PYENV) which python 2>/dev/null || echo python3)
+	@echo "Usando Python em: $$PY_CMD"
+else
+	@echo "pyenv não encontrado. Por favor instale pyenv primeiro."
+	@echo "Veja instruções em: https://github.com/pyenv/pyenv#installation"
+	@exit 1
+endif
 
+# Alvos padrão
+.PHONY: all
+all: install
 
+# Criar ambiente virtual - importante: usar o Python do pyenv diretamente
+$(VENV): check-python
+	bash -c 'source ~/.bashrc > /dev/null 2>&1 || true; \
+		if command -v $(PYENV) > /dev/null; then \
+			PYTHON_CMD=$$($(PYENV) which python); \
+			echo "Criando ambiente virtual com: $$PYTHON_CMD"; \
+			$$PYTHON_CMD -m venv $(VENV); \
+		else \
+			echo "Usando Python padrão"; \
+			python3 -m venv $(VENV); \
+		fi'
+	$(BIN)/pip install --upgrade pip
+
+# Instalar dependências
+.PHONY: deps
+deps: $(VENV)
+	$(BIN)/pip install -r requirements.txt
+
+# Preparar diretórios
+.PHONY: prepare
+prepare:
+	mkdir -p src/edlab_pdfmanager.egg-info
+	chmod -R 777 src/edlab_pdfmanager.egg-info
+
+# Instalar globalmente
+.PHONY: install
+install: deps prepare
+	$(PIPX) uninstall edlab-pdfmanager || true
+	rm -rf ~/.local/share/pipx/venvs/edlab-pdfmanager || true
+	$(PIPX) install -e . --force
+	
+# Desinstalar
+.PHONY: uninstall
+uninstall:
+	$(PIPX) uninstall edlab-pdfmanager || true
+
+# Limpar arquivos temporários
+.PHONY: clean
 clean:
-	-rm output.pdf
-	-rm output_images -rf
-	-rm output[1-3].pdf
-	-rm img -rf
-	-rm img1 -rf
-	-rm img2 -rf
-	-rm img3 -rf
-	-rm PAGES.txt 
-	-rm *pages* *merge* *extracted_* log.txt output* *_watermark* *compressed* *modified* *.docx *gray* *black*
+	rm -rf $(VENV)
+	rm -rf *.egg-info
+	rm -rf src/*.egg-info
+	rm -rf build/
+	rm -rf dist/
+	find . -type d -name __pycache__ -exec rm -rf {} +
+
+# Reinstalar
+.PHONY: reinstall
+reinstall: uninstall clean install
