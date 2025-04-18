@@ -56,4 +56,5 @@ class ElevenLabsTTS:
 ELEVENLABS_VOICES = {
     "Ana Dias": "MZxV5lN3cv7hi1376O0m",  # Default voice
     "Manuel": "NKKvpecEshlHm99K9zn9",
+    "Carla": "eVXYtPVYB9wDoz9NVTIy",
 }
